@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users, Plus, X, ChevronDown, ChevronUp, Droplets, Moon, Footprints,
   Wine, Cigarette, UtensilsCrossed, Heart, Edit3, Trash2, UserPlus, Calendar, Activity,
-  Scale, Ruler, Cake
+  Scale, Ruler, Cake, Wind, Save, Check
 } from 'lucide-react';
+import { membersAPI } from '../../services/api';
 
 function calculateAge(dob) {
   if (!dob) return 0;
@@ -32,48 +33,51 @@ function getAvatarColor(name) {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-function getMemberScore(data) {
-  if (!data) return null;
+// Same score formula as Daily Log & Dashboard
+function getMemberScore(ls) {
+  if (!ls) return null;
+  const sleep = ls.sleep || 0;
+  const stress = (ls.stress || 0) * 10; // 1-10 → 0-100
+  const steps = ls.steps ? Number(ls.steps) : 0;
+  const water = ls.waterIntake || 0;
+
   const base =
-    (data.stress || 0) * 0.30 +
-    Math.max(0, (8 - (data.sleep || 0)) / 8) * 100 * 0.25 +
-    Math.max(0, (10000 - (data.steps || 0)) / 10000) * 100 * 0.15 +
-    Math.max(0, (3 - (data.water || 0)) / 3) * 100 * 0.10;
+    stress * 0.30 +
+    Math.max(0, (8 - sleep) / 8) * 100 * 0.25 +
+    Math.max(0, (10000 - steps) / 10000) * 100 * 0.15 +
+    Math.max(0, (3 - water) / 3) * 100 * 0.10;
   const penalty =
-    (data.alcohol ? 8 : 0) +
-    (data.smoking ? 10 : 0) +
-    (!data.mealsOnTime ? 5 : 0);
+    (ls.alcohol ? 8 : 0) +
+    (ls.smoking ? 10 : 0) +
+    (!(ls.breakfast && ls.lunch && ls.dinner) ? 5 : 0);
   return Math.min(100, Math.round(base + penalty));
 }
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
-const DEFAULT_DAILY = {
-  sleep: 7, stress: 30, steps: 5000, water: 2.0,
-  alcohol: false, smoking: false, mealsOnTime: true
+const EMPTY_LIFESTYLE = {
+  sleep: 7, stress: 4, steps: "", waterIntake: 2.0,
+  breakfast: false, lunch: false, dinner: false,
+  smoking: false, alcohol: false
 };
 
-export default function FamilyMembers() {
-  const [members, setMembers] = useState([
-    {
-      id: 1, name: 'Rahul Mehta', relation: 'Spouse', dob: '1992-03-15', weight: 74, height: 175,
-      dailyLogs: {
-        [todayStr()]: { sleep: 6.5, stress: 45, steps: 3200, water: 1.5, alcohol: false, smoking: false, mealsOnTime: true }
-      }
-    },
-    {
-      id: 2, name: 'Ananya Sharma', relation: 'Mother', dob: '1968-08-22', weight: 62, height: 158,
-      dailyLogs: {
-        [todayStr()]: { sleep: 5, stress: 60, steps: 1800, water: 1.0, alcohol: false, smoking: false, mealsOnTime: false }
-      }
-    },
-  ]);
+const STORAGE_KEY = "hg_family_members";
 
+function scoreColor(s) {
+  return s >= 70 ? "var(--color-danger)" : s >= 50 ? "var(--color-warning)" : "var(--color-success)";
+}
+
+function stressColor(v) {
+  return v <= 3 ? "var(--color-success)" : v <= 6 ? "var(--color-warning)" : "var(--color-danger)";
+}
+
+export default function FamilyMembers() {
+  const [members, setMembers] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [editDataId, setEditDataId] = useState(null);
 
-  // Add member form
+  // Form state
   const [newName, setNewName] = useState('');
   const [newRelation, setNewRelation] = useState('Spouse');
   const [newDob, setNewDob] = useState('');
@@ -83,54 +87,96 @@ export default function FamilyMembers() {
 
   const maxDate = new Date().toISOString().split('T')[0];
 
+  // Load from API
+  useEffect(() => {
+    const loadMembers = async () => {
+      try {
+        const { data } = await membersAPI.getAll();
+        if (data.members && data.members.length > 0) {
+          // Convert MongoDB _id to id for frontend compatibility
+          setMembers(data.members.map(m => ({
+            ...m,
+            id: m._id || m.id,
+            dailyLogs: m.dailyLogs || {}
+          })));
+        }
+      } catch {
+        // Fallback: try localStorage
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) setMembers(JSON.parse(raw));
+        } catch { /* ignore */ }
+      }
+    };
+    loadMembers();
+  }, []);
+
   const resetForm = () => {
     setNewName(''); setNewRelation('Spouse'); setNewDob(''); setNewWeight(''); setNewHeight('');
     setFormErrors({});
   };
 
-  const addMember = () => {
+  const addMember = async () => {
     const errs = {};
     if (!newName.trim()) errs.name = 'Name is required';
     if (!newDob) errs.dob = 'Date of birth is required';
-    if (!newWeight || parseFloat(newWeight) < 10 || parseFloat(newWeight) > 300) errs.weight = 'Valid weight required (10–300 kg)';
-    if (!newHeight || parseFloat(newHeight) < 50 || parseFloat(newHeight) > 250) errs.height = 'Valid height required (50–250 cm)';
+    if (!newWeight || parseFloat(newWeight) < 10 || parseFloat(newWeight) > 300) errs.weight = 'Valid weight required';
+    if (!newHeight || parseFloat(newHeight) < 50 || parseFloat(newHeight) > 250) errs.height = 'Valid height required';
     if (Object.keys(errs).length) { setFormErrors(errs); return; }
 
-    const member = {
-      id: Date.now(),
+    const memberData = {
       name: newName.trim(),
       relation: newRelation,
       dob: newDob,
       weight: parseFloat(newWeight),
       height: parseFloat(newHeight),
-      dailyLogs: {}
     };
-    setMembers([...members, member]);
+
+    try {
+      const { data } = await membersAPI.add(memberData);
+      const m = data.member;
+      setMembers([...members, { ...m, id: m._id, dailyLogs: m.dailyLogs || {} }]);
+    } catch {
+      // Fallback: local only
+      setMembers([...members, { ...memberData, id: Date.now(), dailyLogs: {} }]);
+    }
     resetForm();
     setShowAddModal(false);
   };
 
-  const removeMember = (id) => {
-    setMembers(members.filter(m => m.id !== id));
+  const removeMember = async (id) => {
+    try {
+      await membersAPI.remove(id);
+    } catch { /* continue locally */ }
+    setMembers(members.filter(m => (m._id || m.id) !== id));
     if (expandedId === id) setExpandedId(null);
   };
 
-  const updateDailyData = (memberId, field, value) => {
+  const updateDailyData = async (memberId, field, value) => {
+    // Update locally first for instant UI response
+    const today = todayStr();
     setMembers(members.map(m => {
-      if (m.id !== memberId) return m;
-      const today = todayStr();
-      const existing = m.dailyLogs[today] || { ...DEFAULT_DAILY };
+      if ((m._id || m.id) !== memberId) return m;
+      const existing = (m.dailyLogs && m.dailyLogs[today]) || { ...EMPTY_LIFESTYLE };
+      const updated = { ...existing, [field]: value };
       return {
         ...m,
-        dailyLogs: { ...m.dailyLogs, [today]: { ...existing, [field]: value } }
+        dailyLogs: { ...m.dailyLogs, [today]: updated }
       };
     }));
+    // Sync to DB
+    try {
+      const member = members.find(m => (m._id || m.id) === memberId);
+      const existing = (member?.dailyLogs && member.dailyLogs[today]) || { ...EMPTY_LIFESTYLE };
+      const updated = { ...existing, [field]: value };
+      await membersAPI.updateDaily(memberId, today, updated);
+    } catch { /* ignore */ }
   };
 
-  const getTodayData = (member) => member.dailyLogs[todayStr()] || null;
+  const getTodayData = (member) => (member.dailyLogs && member.dailyLogs[todayStr()]) || null;
 
   return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* Header */}
       <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -178,10 +224,10 @@ export default function FamilyMembers() {
                   <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{member.name}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', gap: 8, alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
                     <span>{member.relation}</span>
-                    {member.dob && <><span style={{ color: 'var(--border-color)' }}>•</span><span>{calculateAge(member.dob)} yrs</span></>}
-                    {member.weight && <><span style={{ color: 'var(--border-color)' }}>•</span><span>{member.weight} kg</span></>}
-                    {member.height && <><span style={{ color: 'var(--border-color)' }}>•</span><span>{member.height} cm</span></>}
-                    {member.weight && member.height && <><span style={{ color: 'var(--border-color)' }}>•</span><span>BMI {calculateBMI(member.weight, member.height)}</span></>}
+                    {member.dob && <><span style={{ color: 'var(--border-color)' }}>·</span><span>{calculateAge(member.dob)} yrs</span></>}
+                    {member.weight && <><span style={{ color: 'var(--border-color)' }}>·</span><span>{member.weight} kg</span></>}
+                    {member.height && <><span style={{ color: 'var(--border-color)' }}>·</span><span>{member.height} cm</span></>}
+                    {member.weight && member.height && <><span style={{ color: 'var(--border-color)' }}>·</span><span>BMI {calculateBMI(member.weight, member.height)}</span></>}
                   </div>
                 </div>
               </div>
@@ -189,10 +235,10 @@ export default function FamilyMembers() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 {score !== null ? (
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>Today's Score</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>Score</div>
                     <span style={{
                       fontSize: 22, fontWeight: 800,
-                      color: score > 70 ? 'var(--color-danger)' : score > 50 ? 'var(--color-warning)' : 'var(--color-success)'
+                      color: scoreColor(score)
                     }}>{score}</span>
                   </div>
                 ) : (
@@ -204,7 +250,7 @@ export default function FamilyMembers() {
               </div>
             </div>
 
-            {/* Expanded Section */}
+            {/* Expanded Section — inline daily log */}
             {isExpanded && (
               <div style={{
                 borderTop: '1px solid var(--border-color)',
@@ -212,13 +258,21 @@ export default function FamilyMembers() {
                 background: 'var(--bg-primary)',
                 animation: 'fadeIn 0.25s ease forwards'
               }}>
-                {/* Action Buttons */}
+                {/* Action bar */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Calendar size={14} color="var(--text-secondary)" />
                     <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
                       {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
                     </span>
+                    {score !== null && (
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 999,
+                        background: scoreColor(score) + '15', color: scoreColor(score), marginLeft: 8
+                      }}>
+                        Risk: {score}
+                      </span>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button
@@ -229,15 +283,14 @@ export default function FamilyMembers() {
                         if (isEditing) {
                           setEditDataId(null);
                         } else {
-                          // Initialize today's data if not present
                           if (!todayData) {
-                            updateDailyData(member.id, 'sleep', DEFAULT_DAILY.sleep);
+                            updateDailyData(member.id, 'sleep', EMPTY_LIFESTYLE.sleep);
                           }
                           setEditDataId(member.id);
                         }
                       }}
                     >
-                      <Edit3 size={13} /> {isEditing ? 'Done' : todayData ? 'Edit Data' : 'Log Today'}
+                      {isEditing ? <><Check size={13} /> Done</> : <><Edit3 size={13} /> {todayData ? 'Edit' : 'Log Today'}</>}
                     </button>
                     <button
                       className="ghost-btn"
@@ -249,37 +302,54 @@ export default function FamilyMembers() {
                   </div>
                 </div>
 
-                {/* Data Display / Edit */}
-                {todayData || isEditing ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                    {/* Slider Fields */}
-                    <DailySlider icon={Moon} iconColor="#8B5CF6" label="Sleep" value={(todayData || DEFAULT_DAILY).sleep}
-                      unit=" hrs" min={0} max={12} step={0.5} editing={isEditing}
-                      onChange={v => updateDailyData(member.id, 'sleep', v)} />
-                    <DailySlider icon={Activity} iconColor="#EF4444" label="Stress" value={(todayData || DEFAULT_DAILY).stress}
-                      unit="%" min={0} max={100} step={5} editing={isEditing}
-                      onChange={v => updateDailyData(member.id, 'stress', v)} />
-                    <DailySlider icon={Footprints} iconColor="#F59E0B" label="Steps" value={(todayData || DEFAULT_DAILY).steps}
-                      unit="" min={0} max={15000} step={500} editing={isEditing}
-                      onChange={v => updateDailyData(member.id, 'steps', v)} />
-                    <DailySlider icon={Droplets} iconColor="#0EA5E9" label="Water" value={(todayData || DEFAULT_DAILY).water}
-                      unit=" L" min={0} max={5} step={0.1} editing={isEditing}
-                      onChange={v => updateDailyData(member.id, 'water', v)} />
+                {/* Daily data view / edit */}
+                {todayData || isEditing ? (() => {
+                  const data = todayData || EMPTY_LIFESTYLE;
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                      {/* Sleep */}
+                      <MemberSlider icon={Moon} iconColor="#8B5CF6" label="Sleep" 
+                        value={data.sleep} unit="h" min={0} max={14} step={0.5} editing={isEditing}
+                        valueColor={data.sleep < 6 ? "var(--color-danger)" : data.sleep < 7 ? "var(--color-warning)" : "var(--color-success)"}
+                        onChange={v => updateDailyData(member.id, 'sleep', v)} />
+                      
+                      {/* Stress */}
+                      <MemberSlider icon={Wind} iconColor="#EF4444" label="Stress" 
+                        value={data.stress} unit="/10" min={1} max={10} step={1} editing={isEditing}
+                        valueColor={stressColor(data.stress)}
+                        onChange={v => updateDailyData(member.id, 'stress', v)} />
+                      
+                      {/* Steps */}
+                      <MemberSlider icon={Footprints} iconColor="#F59E0B" label="Steps" 
+                        value={data.steps ? Number(data.steps) : 0} unit="" min={0} max={15000} step={500} editing={isEditing}
+                        onChange={v => updateDailyData(member.id, 'steps', String(v))} />
+                      
+                      {/* Water */}
+                      <MemberSlider icon={Droplets} iconColor="#0EA5E9" label="Water" 
+                        value={data.waterIntake} unit="L" min={0} max={5} step={0.1} editing={isEditing}
+                        valueColor={data.waterIntake >= 2.5 ? "var(--color-success)" : data.waterIntake >= 1.5 ? "var(--color-warning)" : "var(--color-danger)"}
+                        onChange={v => updateDailyData(member.id, 'waterIntake', v)} />
 
-                    {/* Toggle Fields */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginTop: 12 }}>
-                      <HabitPill icon={UtensilsCrossed} label="Meals On Time" active={(todayData || DEFAULT_DAILY).mealsOnTime}
-                        color="#10B981" editing={isEditing}
-                        onClick={() => isEditing && updateDailyData(member.id, 'mealsOnTime', !(todayData || DEFAULT_DAILY).mealsOnTime)} />
-                      <HabitPill icon={Wine} label="Alcohol" active={(todayData || DEFAULT_DAILY).alcohol}
-                        color="#8B5CF6" editing={isEditing} invert
-                        onClick={() => isEditing && updateDailyData(member.id, 'alcohol', !(todayData || DEFAULT_DAILY).alcohol)} />
-                      <HabitPill icon={Cigarette} label="Smoking" active={(todayData || DEFAULT_DAILY).smoking}
-                        color="#F59E0B" editing={isEditing} invert
-                        onClick={() => isEditing && updateDailyData(member.id, 'smoking', !(todayData || DEFAULT_DAILY).smoking)} />
+                      {/* Meals + Habits */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginTop: 14 }}>
+                        {/* Meals */}
+                        {["breakfast", "lunch", "dinner"].map(meal => (
+                          <HabitPill key={meal} icon={UtensilsCrossed} label={meal.charAt(0).toUpperCase() + meal.slice(1)}
+                            active={data[meal]} color="#10B981" editing={isEditing}
+                            onClick={() => isEditing && updateDailyData(member.id, meal, !data[meal])} />
+                        ))}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+                        <HabitPill icon={Cigarette} label="No Smoking" active={!data.smoking}
+                          color="#F59E0B" editing={isEditing}
+                          onClick={() => isEditing && updateDailyData(member.id, 'smoking', !data.smoking)} />
+                        <HabitPill icon={Wine} label="No Alcohol" active={!data.alcohol}
+                          color="#8B5CF6" editing={isEditing}
+                          onClick={() => isEditing && updateDailyData(member.id, 'alcohol', !data.alcohol)} />
+                      </div>
                     </div>
-                  </div>
-                ) : (
+                  );
+                })() : (
                   <div style={{
                     padding: 24, textAlign: 'center', borderRadius: 'var(--radius-sm)',
                     border: '2px dashed var(--border-color)', color: 'var(--text-muted)'
@@ -341,7 +411,7 @@ export default function FamilyMembers() {
                 placeholder="e.g. Rahul Sharma" style={modalInputStyle(formErrors.name)} />
             </ModalField>
 
-            {/* Relation + DOB row */}
+            {/* Relation + DOB */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <ModalField label="Relation">
                 <select value={newRelation} onChange={e => setNewRelation(e.target.value)}
@@ -355,7 +425,7 @@ export default function FamilyMembers() {
               </ModalField>
             </div>
 
-            {/* Age preview from DOB */}
+            {/* Age preview */}
             {newDob && calculateAge(newDob) > 0 && (
               <div style={{
                 padding: '8px 12px', borderRadius: 'var(--radius-sm)', marginBottom: 14,
@@ -368,7 +438,7 @@ export default function FamilyMembers() {
               </div>
             )}
 
-            {/* Weight + Height row */}
+            {/* Weight + Height */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <ModalField label="Weight (kg)" error={formErrors.weight} icon={<Scale size={11} color="var(--text-muted)" />}>
                 <input type="number" value={newWeight} onChange={e => setNewWeight(e.target.value)}
@@ -457,7 +527,7 @@ function ModalField({ label, error, icon, children }) {
 
 /* ---------- Sub-components ---------- */
 
-function DailySlider({ icon: Icon, iconColor, label, value, unit, min, max, step, editing, onChange }) {
+function MemberSlider({ icon: Icon, iconColor, label, value, unit, min, max, step, editing, onChange, valueColor }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 12,
@@ -487,7 +557,8 @@ function DailySlider({ icon: Icon, iconColor, label, value, unit, min, max, step
       )}
       <span style={{
         fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)',
-        width: 70, textAlign: 'right', flexShrink: 0
+        width: 70, textAlign: 'right', flexShrink: 0,
+        color: valueColor || 'var(--text-primary)'
       }}>
         {typeof value === 'number' && step < 1 ? value.toFixed(1) : value}{unit}
       </span>
@@ -495,24 +566,23 @@ function DailySlider({ icon: Icon, iconColor, label, value, unit, min, max, step
   );
 }
 
-function HabitPill({ icon: Icon, label, active, color, editing, invert, onClick }) {
-  const isGood = invert ? !active : active;
+function HabitPill({ icon: Icon, label, active, color, editing, onClick }) {
   return (
     <div
       onClick={onClick}
       style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px',
         borderRadius: 'var(--radius-sm)', cursor: editing ? 'pointer' : 'default',
-        border: `1px solid ${isGood ? color + '40' : 'var(--border-color)'}`,
-        background: isGood ? color + '0A' : 'var(--bg-secondary)',
+        border: `1px solid ${active ? color + '40' : 'var(--border-color)'}`,
+        background: active ? color + '0A' : 'var(--bg-secondary)',
         transition: 'all 0.2s'
       }}
     >
-      <Icon size={14} color={isGood ? color : 'var(--text-muted)'} />
+      <Icon size={14} color={active ? color : 'var(--text-muted)'} />
       <div>
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)' }}>{label}</div>
-        <div style={{ fontSize: 10, fontWeight: 600, color: isGood ? color : 'var(--text-muted)', marginTop: 1 }}>
-          {invert ? (active ? 'Yes' : 'No') : (active ? 'Yes' : 'No')}
+        <div style={{ fontSize: 10, fontWeight: 600, color: active ? color : 'var(--text-muted)', marginTop: 1 }}>
+          {active ? 'Yes' : 'No'}
         </div>
       </div>
     </div>

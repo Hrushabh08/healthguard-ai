@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { authAPI } from "../../services/api";
 
 const COLORS = {
   gradientStart: "#4f46e5",
@@ -84,9 +85,8 @@ export default function ProfileSetup() {
     if (Object.keys(e).length) { setErrors(e); return; }
     setErrors({});
     setAnimating(true);
-    setTimeout(() => {
+    setTimeout(async () => {
       if (step === 2) {
-        // Save to localStorage
         const profile = {
           fullName: fullName.trim(),
           dob,
@@ -97,7 +97,16 @@ export default function ProfileSetup() {
           lastUpdated: new Date().toISOString(),
           createdAt: new Date().toISOString(),
         };
+        // Save to localStorage (offline fallback)
         localStorage.setItem("hg_profile", JSON.stringify(profile));
+        // Save to database
+        try {
+          await authAPI.updateProfile({
+            dob,
+            weight: parseFloat(weight),
+            height: parseFloat(height),
+          });
+        } catch { /* continue — data saved locally */ }
       }
       setStep(step + 1);
       setAnimating(false);

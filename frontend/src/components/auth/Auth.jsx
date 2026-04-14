@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { authAPI } from "../../services/api";
 
 const COLORS = {
   gradientStart: "#4f46e5",
@@ -263,28 +264,46 @@ export default function Auth() {
     if (!form.password || form.password.length < 6) e.password = "Min. 6 characters required.";
     return e;
   };
-   const handleSubmit = () => {
-  const errors = validate();
-
-  if (Object.keys(errors).length) {
-    setErrors(errors);
-    return;
-  }
-
-  setErrors({});
-  setLoading(true);
-
-  setTimeout(() => {
-    setLoading(false);
-    // Check if profile already exists — skip setup if so
-    const profile = localStorage.getItem("hg_profile");
-    if (profile) {
-      navigate("/dashboard");
-    } else {
-      navigate("/profile-setup");
+   const handleSubmit = async () => {
+    const errs = validate();
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return;
     }
-  }, 1200);
-};
+
+    setErrors({});
+    setLoading(true);
+
+    try {
+      const body = mode === "signup"
+        ? { name: form.name, email: form.email, password: form.password }
+        : { email: form.email, password: form.password };
+
+      const apiCall = mode === "signup" ? authAPI.register : authAPI.login;
+      const { data } = await apiCall(body);
+
+      // Store JWT token and user data
+      localStorage.setItem("hg_token", data.token);
+      localStorage.setItem("hg_user", JSON.stringify(data.user));
+
+      setLoading(false);
+      setSuccess(true);
+
+      setTimeout(() => {
+        // Check if profile has been completed
+        const user = data.user;
+        if (user.profile && user.profile.weight > 0) {
+          navigate("/dashboard");
+        } else {
+          navigate("/profile-setup");
+        }
+      }, 800);
+    } catch (err) {
+      setLoading(false);
+      const msg = err.response?.data?.message || "Unable to connect to server. Please try again.";
+      setErrors({ email: msg });
+    }
+  };
  
   const isLogin = mode === "login";
 

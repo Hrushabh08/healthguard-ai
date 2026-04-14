@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Scale, Ruler, X, RefreshCw } from "lucide-react";
+import { logsAPI, authAPI } from "../../services/api";
 
 // Components
 import Sidebar from "../layout/Sidebar";
@@ -9,13 +10,12 @@ import HealthSummary from "./HealthSummary";
 import RiskScore from "./RiskScore";
 import EnvironmentalInsights from "./EnvironmentalInsights";
 import MicroGoals from "./MicroGoals";
-import WhatIfSimulator from "../simulator/WhatIfSimulator";
-import ExplainableAI from "../xai/ExplainableAI";
 import AIInsights from "../xai/AIInsights";
 import BenchmarkingSection from "./BenchmarkingSection";
 import VoiceInput from "../features/VoiceInput";
 import FamilyMembers from "../features/FamilyMembers";
 import DoctorReadySummary from "../reports/DoctorReadySummary";
+import HealthLog from "../healthlog/HealthLog";
 
 function calculateAge(dob) {
   if (!dob) return 0;
@@ -83,16 +83,41 @@ export default function Dashboard() {
     { id: 2, text: "Sleep goal missed.", time: "1h ago", unread: true, color: "var(--color-warning)" },
   ]);
 
-  // Vitals State
-  const [sleep, setSleep] = useState(5.1);
-  const [stress, setStress] = useState(72);
-  const [activity, setActivity] = useState(2400);
+  // ── Initialize vitals from today's daily log (unified structure) ──
+  const [todayLog, setTodayLog] = useState(null);
 
-  // Lifestyle State
-  const [water, setWater] = useState(1.0);
-  const [alcohol, setAlcohol] = useState(true);
-  const [smoking, setSmoking] = useState(true);
-  const [mealsOnTime, setMealsOnTime] = useState(false);
+  useEffect(() => {
+    const loadTodayLog = async () => {
+      try {
+        const { data } = await logsAPI.getToday();
+        if (data.log) setTodayLog(data.log);
+      } catch {
+        // Fallback: try localStorage
+        try {
+          const raw = localStorage.getItem("hg_daily_logs");
+          if (raw) {
+            const logs = JSON.parse(raw);
+            const today = new Date().toISOString().slice(0, 10);
+            const found = logs.find(l => l.date === today);
+            if (found) setTodayLog(found);
+          }
+        } catch { /* ignore */ }
+      }
+    };
+    loadTodayLog();
+  }, [nav]); // Refresh when navigating back to dashboard
+  const ls = todayLog?.lifestyle;
+
+  // Vitals State — seeded from today's daily log lifestyle section
+  const sleep = ls?.sleep ?? 5.1;
+  const stress = (ls?.stress ?? 7) * 10; // 1-10 → 0-100 for score formula
+  const activity = ls?.steps ? Number(ls.steps) : 2400;
+
+  // Lifestyle State — seeded from today's daily log
+  const water = ls?.waterIntake ?? 1.0;
+  const alcohol = ls?.alcohol ?? true;
+  const smoking = ls?.smoking ?? true;
+  const mealsOnTime = ls ? (ls.breakfast && ls.lunch && ls.dinner) : false;
 
   // Derived Score
   const baseScore =
@@ -109,7 +134,7 @@ export default function Dashboard() {
   const unreadCount = notifs.filter(n => n.unread).length;
 
   // Handle weight/height update
-  const handleUpdateProfile = () => {
+  const handleUpdateProfile = async () => {
     if (!updateWeight || !updateHeight) return;
     const w = parseFloat(updateWeight);
     const h = parseFloat(updateHeight);
@@ -125,6 +150,10 @@ export default function Dashboard() {
     };
     localStorage.setItem("hg_profile", JSON.stringify(updated));
     setProfile(updated);
+    // Sync to DB
+    try {
+      await authAPI.updateProfile({ weight: w, height: h, dob: profile.dob });
+    } catch { /* continue */ }
     setShowUpdateModal(false);
     setShowReminder(false);
     setUpdateWeight("");
@@ -264,32 +293,26 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* Health Log View */}
+          {nav === "log" && (
+            <div className="fade-in">
+              <HealthLog />
+            </div>
+          )}
+
           {/* Risk Score View */}
           {nav === "risk" && (
             <RiskScore score={score} sleep={sleep} stress={stress} activity={activity} />
           )}
 
-          {/* Simulator View */}
-          {nav === "whatif" && (
-            <div className="fade-in" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-              <WhatIfSimulator 
-                sleep={sleep} setSleep={setSleep}
-                stress={stress} setStress={setStress}
-                activity={activity} setActivity={setActivity}
-                water={water} setWater={setWater}
-                alcohol={alcohol} setAlcohol={setAlcohol}
-                smoking={smoking} setSmoking={setSmoking}
-                mealsOnTime={mealsOnTime} setMealsOnTime={setMealsOnTime}
-                currentScore={score}
-              />
-              <ExplainableAI sleep={sleep} stress={stress} activity={activity} />
-            </div>
-          )}
 
           {/* AI Insights View */}
           {nav === "ai" && (
             <div className="fade-in">
-              <AIInsights score={score} sleep={sleep} stress={stress} activity={activity} />
+              <AIInsights score={score} sleep={sleep} stress={stress} activity={activity}
+                water={water} alcohol={alcohol} smoking={smoking} mealsOnTime={mealsOnTime}
+                todayLog={todayLog}
+              />
             </div>
           )}
 
@@ -303,7 +326,9 @@ export default function Dashboard() {
           {/* Reports View */}
           {nav === "report" && (
             <div className="fade-in" style={{ maxWidth: 640, margin: "0 auto" }}>
-              <DoctorReadySummary score={score} />
+              <DoctorReadySummary score={score} sleep={sleep} stress={stress}
+                activity={activity} water={water} todayLog={todayLog}
+              />
             </div>
           )}
 

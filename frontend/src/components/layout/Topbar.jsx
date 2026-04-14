@@ -18,9 +18,9 @@ export default function Topbar({ nav, score, unreadCount, USER, showNotif, setSh
   const getNavTitle = () => {
     switch(nav) {
       case "dashboard": return "Dashboard";
+      case "log": return "Daily Health Log";
       case "risk": return "Risk Score";
-      case "whatif": return "What-If Simulator";
-      case "ai": return "Explainable AI (XAI)";
+      case "ai": return "AI Insights";
       case "members": return "Family & Members";
       case "report": return "Doctor-Ready Reports";
       default: return "Dashboard";

@@ -1,17 +1,17 @@
 import React from 'react';
 import { 
-  Home, Activity, Sliders, Brain, Users, FileText, 
-  LogOut, Shield, Settings 
+  Home, Activity, Brain, Users, FileText, 
+  LogOut, Shield, ClipboardPlus 
 } from 'lucide-react';
 
 export default function Sidebar({ nav, setNav, sidebar, setSidebar, navigate }) {
   const NAV_ITEMS = [
-    { id: "dashboard", icon: <Home size={18} />,     label: "Dashboard" },
-    { id: "risk",      icon: <Activity size={18} />, label: "Risk Score" },
-    { id: "whatif",    icon: <Sliders size={18} />,  label: "What-If Sim" },
-    { id: "ai",        icon: <Brain size={18} />,    label: "AI Insights" },
-    { id: "members",   icon: <Users size={18} />,    label: "Members" },
-    { id: "report",    icon: <FileText size={18} />, label: "Reports" },
+    { id: "dashboard", icon: <Home size={18} />,           label: "Dashboard" },
+    { id: "log",       icon: <ClipboardPlus size={18} />,  label: "Daily Log" },
+    { id: "risk",      icon: <Activity size={18} />,       label: "Risk Score" },
+    { id: "ai",        icon: <Brain size={18} />,          label: "AI Insights" },
+    { id: "members",   icon: <Users size={18} />,          label: "Members" },
+    { id: "report",    icon: <FileText size={18} />,       label: "Reports" },
   ];
 
   return (

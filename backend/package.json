@@ -1,16 +1,21 @@
 {
-  "name": "backend",
+  "name": "healthguard-backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "HealthGuard AI Backend — JWT Auth & API",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "dev": "node --watch server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
     "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.2",
     "mongoose": "^9.4.1"
   }
 }
