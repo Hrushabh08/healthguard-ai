@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "dev": "npm run dev --prefix frontend"
+  },
+  "dependencies": {
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  }
+}
