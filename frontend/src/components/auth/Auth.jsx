@@ -276,7 +276,13 @@ export default function Auth() {
 
   setTimeout(() => {
     setLoading(false);
-    navigate("/dashboard");   // 🔥 THIS IS THE MAGIC LINE
+    // Check if profile already exists — skip setup if so
+    const profile = localStorage.getItem("hg_profile");
+    if (profile) {
+      navigate("/dashboard");
+    } else {
+      navigate("/profile-setup");
+    }
   }, 1200);
 };
  
