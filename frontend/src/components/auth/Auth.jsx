@@ -285,6 +285,37 @@ export default function Auth() {
       // Store JWT token and user data
       localStorage.setItem("hg_token", data.token);
       localStorage.setItem("hg_user", JSON.stringify(data.user));
+      
+      const u = data.user;
+      if (u.profile && u.profile.weight) {
+        // Calculate age
+        let age = 0;
+        if (u.profile.dob) {
+          const birth = new Date(u.profile.dob);
+          const today = new Date();
+          age = today.getFullYear() - birth.getFullYear();
+          const m = today.getMonth() - birth.getMonth();
+          if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+        }
+        
+        let bmi = 0;
+        if (u.profile.weight && u.profile.height) {
+          const h = u.profile.height / 100;
+          bmi = (u.profile.weight / (h * h)).toFixed(1);
+        }
+
+        localStorage.setItem("hg_profile", JSON.stringify({
+          fullName: u.name,
+          dob: u.profile.dob,
+          weight: u.profile.weight,
+          height: u.profile.height,
+          age: Math.max(0, age),
+          bmi: bmi,
+          lastUpdated: u.profile.lastUpdated || new Date().toISOString()
+        }));
+      } else {
+        localStorage.removeItem("hg_profile");
+      }
 
       setLoading(false);
       setSuccess(true);

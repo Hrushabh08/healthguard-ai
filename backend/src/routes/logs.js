@@ -65,6 +65,37 @@ router.post("/", async (req, res) => {
       { upsert: true, new: true, runValidators: true }
     );
 
+    // ── Reverse-Sync: Update any FamilyMember records tracking this user ──
+    try {
+      const FamilyMember = require("../models/FamilyMember");
+      const userEmail = req.user.email.toLowerCase().trim();
+      const matchedMembers = await FamilyMember.find({ email: userEmail });
+      
+      if (matchedMembers.length > 0) {
+        const syncPromises = [];
+        matchedMembers.forEach(member => {
+          member.dailyLogs.set(date, {
+            sleep:       lifestyle?.sleep       ?? 7,
+            stress:      lifestyle?.stress      ?? 4,
+            steps:       lifestyle?.steps       ?? "",
+            waterIntake: lifestyle?.waterIntake ?? 2.0,
+            breakfast:   lifestyle?.breakfast   ?? false,
+            lunch:       lifestyle?.lunch       ?? false,
+            dinner:      lifestyle?.dinner      ?? false,
+            smoking:     lifestyle?.smoking     ?? false,
+            alcohol:     lifestyle?.alcohol     ?? false,
+            vitals:      vitals || {},
+            notes:       notes || {},
+          });
+          syncPromises.push(member.save());
+        });
+        await Promise.all(syncPromises);
+        console.log(`🔗 Reverse-synced daily log [${date}] from User ${req.user.id} back to ${matchedMembers.length} FamilyMember profile(s)`);
+      }
+    } catch (syncErr) {
+      console.error("Reverse-sync error:", syncErr.message);
+    }
+
     res.json({ success: true, message: "Log saved.", log });
   } catch (err) {
     console.error("Save log error:", err.message);

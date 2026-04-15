@@ -2,8 +2,22 @@ import React, { useState, useEffect } from 'react';
 import {
   Users, Plus, X, ChevronDown, ChevronUp, Droplets, Moon, Footprints,
   Wine, Cigarette, UtensilsCrossed, Heart, Edit3, Trash2, UserPlus, Calendar, Activity,
-  Scale, Ruler, Cake, Wind, Save, Check
+  Scale, Ruler, Cake, Wind, Save, Check, Mail, Stethoscope, Coffee, Pill
 } from 'lucide-react';
+
+const COMMON_SYMPTOMS = [
+  "Headache", "Fatigue", "Nausea", "Dizziness", "Chest Pain",
+  "Shortness of Breath", "Back Pain", "Fever", "Cough",
+  "Joint Pain", "Anxiety", "Insomnia", "Blurred Vision", "Palpitations"
+];
+
+const MOOD_OPTIONS = [
+  { id: "happy", label: "Happy" },
+  { id: "neutral", label: "Neutral" },
+  { id: "stressed", label: "Stressed" },
+  { id: "low", label: "Low" },
+  { id: "anxious", label: "Anxious" },
+];
 import { membersAPI } from '../../services/api';
 
 function calculateAge(dob) {
@@ -58,7 +72,9 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 const EMPTY_LIFESTYLE = {
   sleep: 7, stress: 4, steps: "", waterIntake: 2.0,
   breakfast: false, lunch: false, dinner: false,
-  smoking: false, alcohol: false
+  smoking: false, alcohol: false,
+  vitals: { heartRate: "", bpSys: "", bpDia: "", temperature: "", spo2: "" },
+  notes: { mood: "neutral", medicines: "", symptoms: [], bloodSugar: "", caffeine: "" }
 };
 
 const STORAGE_KEY = "hg_family_members";
@@ -73,12 +89,14 @@ function stressColor(v) {
 
 export default function FamilyMembers() {
   const [members, setMembers] = useState([]);
+  const [linkStatuses, setLinkStatuses] = useState({}); // { [memberId]: true|false|null }
   const [showAddModal, setShowAddModal] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [editDataId, setEditDataId] = useState(null);
 
   // Form state
   const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
   const [newRelation, setNewRelation] = useState('Spouse');
   const [newDob, setNewDob] = useState('');
   const [newWeight, setNewWeight] = useState('');
@@ -93,12 +111,28 @@ export default function FamilyMembers() {
       try {
         const { data } = await membersAPI.getAll();
         if (data.members && data.members.length > 0) {
-          // Convert MongoDB _id to id for frontend compatibility
-          setMembers(data.members.map(m => ({
+          const loaded = data.members.map(m => ({
             ...m,
             id: m._id || m.id,
             dailyLogs: m.dailyLogs || {}
-          })));
+          }));
+          setMembers(loaded);
+
+          // Fetch link statuses for members that have an email
+          const statusMap = {};
+          await Promise.all(
+            loaded.map(async (m) => {
+              if (m.email) {
+                try {
+                  const { data: ls } = await membersAPI.linkStatus(m._id || m.id);
+                  statusMap[m._id || m.id] = ls.linked;
+                } catch {
+                  statusMap[m._id || m.id] = null;
+                }
+              }
+            })
+          );
+          setLinkStatuses(statusMap);
         }
       } catch {
         // Fallback: try localStorage
@@ -112,13 +146,14 @@ export default function FamilyMembers() {
   }, []);
 
   const resetForm = () => {
-    setNewName(''); setNewRelation('Spouse'); setNewDob(''); setNewWeight(''); setNewHeight('');
+    setNewName(''); setNewEmail(''); setNewRelation('Spouse'); setNewDob(''); setNewWeight(''); setNewHeight('');
     setFormErrors({});
   };
 
   const addMember = async () => {
     const errs = {};
     if (!newName.trim()) errs.name = 'Name is required';
+    if (!newEmail.trim() || !/^\S+@\S+\.\S+$/.test(newEmail.trim())) errs.email = 'A valid email is required';
     if (!newDob) errs.dob = 'Date of birth is required';
     if (!newWeight || parseFloat(newWeight) < 10 || parseFloat(newWeight) > 300) errs.weight = 'Valid weight required';
     if (!newHeight || parseFloat(newHeight) < 50 || parseFloat(newHeight) > 250) errs.height = 'Valid height required';
@@ -126,6 +161,7 @@ export default function FamilyMembers() {
 
     const memberData = {
       name: newName.trim(),
+      email: newEmail.trim().toLowerCase(),
       relation: newRelation,
       dob: newDob,
       weight: parseFloat(newWeight),
@@ -135,10 +171,19 @@ export default function FamilyMembers() {
     try {
       const { data } = await membersAPI.add(memberData);
       const m = data.member;
-      setMembers([...members, { ...m, id: m._id, dailyLogs: m.dailyLogs || {} }]);
+      const newMember = { ...m, id: m._id, dailyLogs: m.dailyLogs || {} };
+      setMembers(prev => [...prev, newMember]);
+
+      // Immediately check link status if email provided
+      if (m.email) {
+        try {
+          const { data: ls } = await membersAPI.linkStatus(m._id);
+          setLinkStatuses(prev => ({ ...prev, [m._id]: ls.linked }));
+        } catch { /* non-critical */ }
+      }
     } catch {
       // Fallback: local only
-      setMembers([...members, { ...memberData, id: Date.now(), dailyLogs: {} }]);
+      setMembers(prev => [...prev, { ...memberData, id: Date.now(), dailyLogs: {} }]);
     }
     resetForm();
     setShowAddModal(false);
@@ -152,25 +197,34 @@ export default function FamilyMembers() {
     if (expandedId === id) setExpandedId(null);
   };
 
-  const updateDailyData = async (memberId, field, value) => {
+  const updateDailyData = async (memberId, field, value, nestedProp = null) => {
     // Update locally first for instant UI response
     const today = todayStr();
+    let finalUpdated = null;
+    
     setMembers(members.map(m => {
       if ((m._id || m.id) !== memberId) return m;
-      const existing = (m.dailyLogs && m.dailyLogs[today]) || { ...EMPTY_LIFESTYLE };
-      const updated = { ...existing, [field]: value };
+      const existing = (m.dailyLogs && m.dailyLogs[today]) ? JSON.parse(JSON.stringify(m.dailyLogs[today])) : JSON.parse(JSON.stringify(EMPTY_LIFESTYLE));
+      
+      let updated;
+      if (nestedProp) {
+         updated = { ...existing, [field]: { ...(existing[field] || {}), [nestedProp]: value } };
+      } else {
+         updated = { ...existing, [field]: value };
+      }
+      finalUpdated = updated;
       return {
         ...m,
         dailyLogs: { ...m.dailyLogs, [today]: updated }
       };
     }));
+    
     // Sync to DB
-    try {
-      const member = members.find(m => (m._id || m.id) === memberId);
-      const existing = (member?.dailyLogs && member.dailyLogs[today]) || { ...EMPTY_LIFESTYLE };
-      const updated = { ...existing, [field]: value };
-      await membersAPI.updateDaily(memberId, today, updated);
-    } catch { /* ignore */ }
+    if (finalUpdated) {
+      try {
+        await membersAPI.updateDaily(memberId, today, finalUpdated);
+      } catch { /* ignore */ }
+    }
   };
 
   const getTodayData = (member) => (member.dailyLogs && member.dailyLogs[todayStr()]) || null;
@@ -221,13 +275,37 @@ export default function FamilyMembers() {
                   {member.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                 </div>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{member.name}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {member.name}
+                    {/* Link status badge */}
+                    {member.email && linkStatuses[member.id] === true && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
+                        background: 'rgba(16,185,129,0.12)', color: '#059669',
+                        border: '1px solid rgba(16,185,129,0.25)',
+                        display: 'flex', alignItems: 'center', gap: 3
+                      }}>
+                        🔗 Linked
+                      </span>
+                    )}
+                    {member.email && linkStatuses[member.id] === false && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
+                        background: 'rgba(245,158,11,0.10)', color: '#D97706',
+                        border: '1px solid rgba(245,158,11,0.25)',
+                        display: 'flex', alignItems: 'center', gap: 3
+                      }}>
+                        ✉ Invite pending
+                      </span>
+                    )}
+                  </div>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', gap: 8, alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
                     <span>{member.relation}</span>
                     {member.dob && <><span style={{ color: 'var(--border-color)' }}>·</span><span>{calculateAge(member.dob)} yrs</span></>}
                     {member.weight && <><span style={{ color: 'var(--border-color)' }}>·</span><span>{member.weight} kg</span></>}
                     {member.height && <><span style={{ color: 'var(--border-color)' }}>·</span><span>{member.height} cm</span></>}
                     {member.weight && member.height && <><span style={{ color: 'var(--border-color)' }}>·</span><span>BMI {calculateBMI(member.weight, member.height)}</span></>}
+                    {member.email && <><span style={{ color: 'var(--border-color)' }}>·</span><span style={{ display:'flex', alignItems:'center', gap:3 }}><Mail size={10} />{member.email}</span></>}
                   </div>
                 </div>
               </div>
@@ -347,7 +425,113 @@ export default function FamilyMembers() {
                           color="#8B5CF6" editing={isEditing}
                           onClick={() => isEditing && updateDailyData(member.id, 'alcohol', !data.alcohol)} />
                       </div>
-                    </div>
+
+                      {/* --- VITALS SECTION --- */}
+                      {(isEditing || (data.vitals && (data.vitals.heartRate || data.vitals.bpSys || data.vitals.temperature || data.vitals.spo2))) && (
+                        <div style={{ marginTop: 24 }}>
+                          <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Heart size={14} color="var(--color-danger)" /> Vitals
+                          </h4>
+                          <div style={{ background: 'var(--bg-secondary)', padding: '0 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
+                            <VitalsField label="Heart Rate" placeholder="72" unit="bpm" value={data.vitals?.heartRate} editing={isEditing} onChange={v => updateDailyData(member.id, 'vitals', v, 'heartRate')} />
+                            <VitalsField label="BP (Systolic)" placeholder="120" unit="mmHg" value={data.vitals?.bpSys} editing={isEditing} onChange={v => updateDailyData(member.id, 'vitals', v, 'bpSys')} />
+                            <VitalsField label="BP (Diastolic)" placeholder="80" unit="mmHg" value={data.vitals?.bpDia} editing={isEditing} onChange={v => updateDailyData(member.id, 'vitals', v, 'bpDia')} />
+                            <VitalsField label="Temperature" placeholder="36.6" unit="°C" value={data.vitals?.temperature} editing={isEditing} onChange={v => updateDailyData(member.id, 'vitals', v, 'temperature')} />
+                            <VitalsField label="SpO₂" placeholder="98" unit="%" value={data.vitals?.spo2} editing={isEditing} onChange={v => updateDailyData(member.id, 'vitals', v, 'spo2')} />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* --- HEALTH NOTES SECTION --- */}
+                      {(isEditing || (data.notes && (data.notes.mood !== 'neutral' || data.notes.medicines || data.notes.symptoms?.length > 0 || data.notes.bloodSugar))) && (
+                        <div style={{ marginTop: 24 }}>
+                          <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Stethoscope size={14} color="var(--color-purple)" /> Health Notes
+                          </h4>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, background: 'var(--bg-secondary)', padding: 12, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
+                            {/* Mood */}
+                            {(isEditing || data.notes?.mood !== 'neutral') && (
+                              <div>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Mood</span>
+                                {isEditing ? (
+                                  <select value={data.notes?.mood || 'neutral'} onChange={e => updateDailyData(member.id, 'notes', e.target.value, 'mood')} style={{ width: '100%', padding: '6px 10px', borderRadius: 4, border: '1px solid var(--border-color)', fontSize: 13 }}>
+                                    {MOOD_OPTIONS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                                  </select>
+                                ) : (
+                                  <span style={{ fontSize: 13, fontWeight: 600, textTransform: 'capitalize' }}>{data.notes?.mood}</span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Additional Markers */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                              {(isEditing || data.notes?.bloodSugar) && (
+                                <div>
+                                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Blood Sugar (mg/dL)</span>
+                                  {isEditing ? (
+                                    <input type="number" placeholder="90" value={data.notes?.bloodSugar || ''} onChange={e => updateDailyData(member.id, 'notes', e.target.value, 'bloodSugar')} style={{ width: '100%', padding: '6px 10px', borderRadius: 4, border: '1px solid var(--border-color)', fontSize: 13 }} />
+                                  ) : (
+                                    <span style={{ fontSize: 13, fontWeight: 600 }}>{data.notes?.bloodSugar}</span>
+                                  )}
+                                </div>
+                              )}
+                              {(isEditing || data.notes?.caffeine) && (
+                                <div>
+                                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}><Coffee size={12}/>Caffeine (cups)</span>
+                                  {isEditing ? (
+                                    <input type="number" placeholder="2" value={data.notes?.caffeine || ''} onChange={e => updateDailyData(member.id, 'notes', e.target.value, 'caffeine')} style={{ width: '100%', padding: '6px 10px', borderRadius: 4, border: '1px solid var(--border-color)', fontSize: 13 }} />
+                                  ) : (
+                                    <span style={{ fontSize: 13, fontWeight: 600 }}>{data.notes?.caffeine}</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Medicines */}
+                            {(isEditing || data.notes?.medicines) && (
+                              <div>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}><Pill size={12}/>Medicines</span>
+                                {isEditing ? (
+                                  <textarea placeholder="e.g. Metformin 500mg" value={data.notes?.medicines || ''} onChange={e => updateDailyData(member.id, 'notes', e.target.value, 'medicines')} rows={2} style={{ width: '100%', padding: '6px 10px', borderRadius: 4, border: '1px solid var(--border-color)', fontSize: 13, resize: 'vertical' }} />
+                                ) : (
+                                  <p style={{ fontSize: 13, margin: 0 }}>{data.notes?.medicines}</p>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Symptoms */}
+                            <div>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Symptoms</span>
+                                {isEditing ? (
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                    {COMMON_SYMPTOMS.map(s => {
+                                      const isSel = data.notes?.symptoms?.includes(s);
+                                      return (
+                                        <button key={s} onClick={() => {
+                                          const current = data.notes?.symptoms || [];
+                                          const next = isSel ? current.filter(x => x !== s) : [...current, s];
+                                          updateDailyData(member.id, 'notes', next, 'symptoms');
+                                        }} style={{
+                                          padding: '4px 10px', fontSize: 11, borderRadius: 12, cursor: 'pointer', border: isSel ? '1px solid var(--color-accent)' : '1px solid var(--border-color)',
+                                          background: isSel ? 'var(--color-accent)' : 'var(--bg-primary)', color: isSel ? '#fff' : 'var(--text-secondary)'
+                                        }}>
+                                          {s}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                    {data.notes?.symptoms?.length > 0 ? data.notes.symptoms.map(s => (
+                                      <span key={s} style={{ padding: '2px 8px', fontSize: 11, borderRadius: 12, background: 'var(--bg-primary)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>{s}</span>
+                                    )) : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>None reported</span>}
+                                  </div>
+                                )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      </div>
                   );
                 })() : (
                   <div style={{
@@ -409,6 +593,18 @@ export default function FamilyMembers() {
             <ModalField label="Full Name" error={formErrors.name}>
               <input type="text" value={newName} onChange={e => setNewName(e.target.value)}
                 placeholder="e.g. Rahul Sharma" style={modalInputStyle(formErrors.name)} />
+            </ModalField>
+
+            {/* Email (required — links member to future account) */}
+            <ModalField label="Email Address" error={formErrors.email} icon={<Mail size={11} color="var(--text-muted)" />}>
+              <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)}
+                placeholder="e.g. rahul@email.com" style={modalInputStyle(formErrors.email)} />
+              <p style={{ fontSize: 11, marginTop: 5, padding: '6px 10px', borderRadius: 6,
+                background: 'rgba(14,165,233,0.06)', border: '1px solid rgba(14,165,233,0.15)',
+                color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                <strong style={{ color: 'var(--color-accent)' }}>Required for data sync.</strong>{' '}
+                When they register or log in with this email, all health data logged here will automatically sync to their personal account.
+              </p>
             </ModalField>
 
             {/* Relation + DOB */}
@@ -485,9 +681,9 @@ export default function FamilyMembers() {
               <button className="ghost-btn" style={{ flex: 1 }} onClick={() => { setShowAddModal(false); resetForm(); }}>Cancel</button>
               <button
                 className="primary-btn"
-                style={{ flex: 1, opacity: newName.trim() && newDob && newWeight && newHeight ? 1 : 0.5 }}
+                style={{ flex: 1, opacity: newName.trim() && newEmail.trim() && newDob && newWeight && newHeight ? 1 : 0.5 }}
                 onClick={addMember}
-                disabled={!newName.trim()}
+                disabled={!newName.trim() || !newEmail.trim()}
               >
                 <UserPlus size={15} /> Add Member
               </button>
@@ -585,6 +781,24 @@ function HabitPill({ icon: Icon, label, active, color, editing, onClick }) {
           {active ? 'Yes' : 'No'}
         </div>
       </div>
+    </div>
+  );
+}
+
+function VitalsField({ label, placeholder, unit, value, onChange, editing }) {
+  if (!editing && !value) return null;
+  return (
+    <div style={{ padding: '8px 0', borderBottom: '1px dashed var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{label}</span>
+      {editing ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input type="text" placeholder={placeholder} value={value || ''} onChange={e => onChange(e.target.value)}
+            style={{ width: 60, padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border-color)', fontSize: 13, textAlign: 'right' }} />
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', width: 34 }}>{unit}</span>
+        </div>
+      ) : (
+        <span style={{ fontSize: 13, fontWeight: 600 }}>{value} <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{unit}</span></span>
+      )}
     </div>
   );
 }

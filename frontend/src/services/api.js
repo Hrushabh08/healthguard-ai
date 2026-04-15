@@ -47,12 +47,15 @@ export const logsAPI = {
 };
 
 // ── Family Members ───────────────────────
-export const membersAPI = {
+const membersAPI = {
   getAll: () => API.get("/members"),
   add: (data) => API.post("/members", data),
   updateDaily: (id, date, data) =>
     API.put(`/members/${id}/daily`, { date, data }),
   remove: (id) => API.delete(`/members/${id}`),
+  linkStatus: (id) => API.get(`/members/${id}/link-status`),
 };
+
+export { membersAPI };
 
 export default API;

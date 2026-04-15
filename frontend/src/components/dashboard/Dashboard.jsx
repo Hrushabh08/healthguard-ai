@@ -16,7 +16,7 @@ import VoiceInput from "../features/VoiceInput";
 import FamilyMembers from "../features/FamilyMembers";
 import DoctorReadySummary from "../reports/DoctorReadySummary";
 import HealthLog from "../healthlog/HealthLog";
-
+import AccountSettings from "../settings/AccountSettings";
 function calculateAge(dob) {
   if (!dob) return 0;
   const birth = new Date(dob);
@@ -48,8 +48,16 @@ export default function Dashboard() {
   const [updateWeight, setUpdateWeight] = useState("");
   const [updateHeight, setUpdateHeight] = useState("");
 
+  const [authUser, setAuthUser] = useState(null);
+
   // Load profile & auto-update age from DOB
   useEffect(() => {
+    // Load Auth User
+    try {
+      const u = localStorage.getItem("hg_user");
+      if (u) setAuthUser(JSON.parse(u));
+    } catch { /* ignore */ }
+
     const raw = localStorage.getItem("hg_profile");
     if (raw) {
       const p = JSON.parse(raw);
@@ -70,18 +78,34 @@ export default function Dashboard() {
   // Build USER object from profile
   const USER = profile
     ? {
-        name: profile.fullName || "User",
+        name: profile.fullName || authUser?.name || "User",
         role: `${profile.age} yrs • ${profile.weight} kg • ${profile.height} cm`,
-        avatar: (profile.fullName || "U").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase(),
-        email: "user@healthguard.ai",
+        avatar: (profile.fullName || authUser?.name || "U").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase(),
+        email: authUser?.email || "",
         plan: "Pro",
       }
-    : { name: "Priya Sharma", role: "Software Engineer", avatar: "PS", email: "priya@healthguard.ai", plan: "Pro" };
+    : { name: authUser?.name || "User", role: "", avatar: (authUser?.name || "U").slice(0,2).toUpperCase(), email: authUser?.email || "", plan: "Pro" };
 
-  const [notifs, setNotifs] = useState([
-    { id: 1, text: "Stress spike detected recently.", time: "2m ago", unread: true, color: "var(--color-danger)" },
-    { id: 2, text: "Sleep goal missed.", time: "1h ago", unread: true, color: "var(--color-warning)" },
-  ]);
+
+  const handleProfileUpdateFromSettings = async (formData) => {
+    const w = parseFloat(formData.weight);
+    const h = parseFloat(formData.height);
+    const updated = {
+      ...profile,
+      fullName: formData.fullName,
+      weight: w,
+      height: h,
+      bmi: (w / ((h / 100) ** 2)).toFixed(1),
+      dob: formData.dob,
+      age: calculateAge(formData.dob),
+      lastUpdated: new Date().toISOString(),
+    };
+    localStorage.setItem("hg_profile", JSON.stringify(updated));
+    setProfile(updated);
+    try {
+      await authAPI.updateProfile({ weight: w, height: h, dob: formData.dob });
+    } catch { /* continue */ }
+  };
 
   // ── Initialize vitals from today's daily log (unified structure) ──
   const [todayLog, setTodayLog] = useState(null);
@@ -108,6 +132,58 @@ export default function Dashboard() {
   }, [nav]); // Refresh when navigating back to dashboard
   const ls = todayLog?.lifestyle;
 
+  // Notifications State
+  const [notifs, setNotifsState] = useState([]);
+
+  useEffect(() => {
+    let loadedNotifs = [];
+    try {
+      const stored = localStorage.getItem("hg_notifs");
+      if (stored && stored !== 'undefined') {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) loadedNotifs = parsed;
+      }
+    } catch { /* ignore */ }
+    setNotifsState(loadedNotifs);
+    
+    // Dynamic Reminders check
+    if (todayLog === null) {
+      let wantsReminder = true;
+      try {
+        const settings = JSON.parse(localStorage.getItem("hg_settings"));
+        if (settings && settings.dailyReminder === false) wantsReminder = false;
+      } catch { /* ignore */ }
+
+      if (wantsReminder) {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const hasDailyReminder = loadedNotifs.some(n => n.type === "daily_reminder" && n.date === todayStr);
+        
+        if (!hasDailyReminder) {
+          const newNotif = {
+            id: Date.now().toString(),
+            type: "daily_reminder",
+            text: "Time to log your daily health metrics! Your AI insights await.",
+            time: "Just now",
+            unread: true,
+            color: "var(--color-accent)",
+            date: todayStr
+          };
+          const nextNotifs = [newNotif, ...loadedNotifs];
+          setNotifsState(nextNotifs);
+          localStorage.setItem("hg_notifs", JSON.stringify(nextNotifs));
+        }
+      }
+    }
+  }, [todayLog]);
+
+  const setNotifs = (newNotifs) => {
+    setNotifsState(prev => {
+      const updated = typeof newNotifs === 'function' ? newNotifs(prev) : newNotifs;
+      localStorage.setItem("hg_notifs", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   // Vitals State — seeded from today's daily log lifestyle section
   const sleep = ls?.sleep ?? 5.1;
   const stress = (ls?.stress ?? 7) * 10; // 1-10 → 0-100 for score formula
@@ -131,7 +207,7 @@ export default function Dashboard() {
     (!mealsOnTime ? 5 : 0);
   const score = Math.min(100, Math.round(baseScore + habitPenalty));
 
-  const unreadCount = notifs.filter(n => n.unread).length;
+  const unreadCount = (notifs || []).filter(n => n?.unread).length;
 
   // Handle weight/height update
   const handleUpdateProfile = async () => {
@@ -168,10 +244,10 @@ export default function Dashboard() {
       {/* Main Content Area */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <Topbar 
-          nav={nav} score={score} unreadCount={unreadCount} USER={USER}
+          nav={nav} setNav={setNav} score={score} unreadCount={unreadCount} USER={USER}
           showNotif={showNotif} setShowNotif={setShowNotif} 
           showProf={showProf} setShowProf={setShowProf}
-          notifs={notifs} setNotifs={setNotifs}
+          notifs={notifs || []} setNotifs={setNotifs}
         />
 
         <main style={{ flex: 1, padding: "32px", overflowY: "auto" }}>
@@ -329,6 +405,13 @@ export default function Dashboard() {
               <DoctorReadySummary score={score} sleep={sleep} stress={stress}
                 activity={activity} water={water} todayLog={todayLog}
               />
+            </div>
+          )}
+
+          {/* Settings View */}
+          {nav === "settings" && (
+            <div className="fade-in" style={{ maxWidth: 800, margin: "0 auto" }}>
+              <AccountSettings profile={profile} updateProfileSettings={handleProfileUpdateFromSettings} />
             </div>
           )}
 
