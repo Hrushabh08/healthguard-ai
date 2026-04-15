@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   Home, Activity, Brain, Users, FileText, 
-  LogOut, Shield, ClipboardPlus 
+  LogOut, Shield, ClipboardPlus, Settings
 } from 'lucide-react';
 
 export default function Sidebar({ nav, setNav, sidebar, setSidebar, navigate }) {
@@ -73,7 +73,30 @@ export default function Sidebar({ nav, setNav, sidebar, setSidebar, navigate }) 
 
       {/* Settings / Logout */}
       <div style={{ padding: "16px 12px", borderTop: "1px solid var(--border-color)", display: "flex", flexDirection: "column", gap: 4 }}>
-        <div onClick={() => navigate("/")}
+        <div onClick={() => setNav("settings")}
+          style={{
+            display: "flex", alignItems: "center", gap: 12, padding: "12px 14px",
+            borderRadius: "var(--radius-sm)", cursor: "pointer", 
+            justifyContent: sidebar ? "flex-start" : "center",
+            background: nav === "settings" ? "var(--bg-tertiary)" : "transparent",
+            color: nav === "settings" ? "var(--text-primary)" : "var(--text-secondary)",
+            fontWeight: nav === "settings" ? 600 : 500, fontSize: 13, transition: "all 0.15s"
+          }}
+          onMouseEnter={(e) => { if (nav !== "settings") e.currentTarget.style.color = "var(--text-primary)"; }}
+          onMouseLeave={(e) => { if (nav !== "settings") e.currentTarget.style.color = "var(--text-secondary)"; }}
+        >
+          <span style={{ color: nav === "settings" ? "var(--color-accent)" : "inherit" }}>
+            <Settings size={18} />
+          </span>
+          {sidebar && <span>Settings</span>}
+        </div>
+
+        <div onClick={() => {
+            localStorage.removeItem("hg_token");
+            localStorage.removeItem("hg_user");
+            localStorage.removeItem("hg_profile");
+            window.location.href = "/";
+          }}
           style={{
             display: "flex", alignItems: "center", gap: 12, padding: "12px 14px",
             borderRadius: "var(--radius-sm)", cursor: "pointer", color: "var(--color-danger)",

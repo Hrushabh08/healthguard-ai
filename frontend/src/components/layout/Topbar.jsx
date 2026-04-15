@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
-import { Bell, ChevronDown } from 'lucide-react';
+import { Bell, ChevronDown, X } from 'lucide-react';
 
-export default function Topbar({ nav, score, unreadCount, USER, showNotif, setShowNotif, showProf, setShowProf, notifs, setNotifs }) {
+export default function Topbar({ nav, setNav, score, unreadCount, USER, showNotif, setShowNotif, showProf, setShowProf, notifs, setNotifs }) {
   const notifRef = useRef(null);
   const profRef = useRef(null);
 
@@ -23,6 +23,7 @@ export default function Topbar({ nav, score, unreadCount, USER, showNotif, setSh
       case "ai": return "AI Insights";
       case "members": return "Family & Members";
       case "report": return "Doctor-Ready Reports";
+      case "settings": return "Account Settings";
       default: return "Dashboard";
     }
   }
@@ -78,12 +79,18 @@ export default function Topbar({ nav, score, unreadCount, USER, showNotif, setSh
               <div style={{ maxHeight: 320, overflowY: "auto" }}>
                 {notifs.map(n => (
                   <div key={n.id} onClick={() => setNotifs(p => p.map(x => x.id === n.id ? {...x, unread: false} : x))}
-                    style={{ padding: "16px", borderBottom: "1px solid var(--bg-tertiary)", cursor: "pointer", background: n.unread ? "var(--bg-primary)" : "#fff", display: "flex", gap: 12 }}>
+                    style={{ padding: "16px", borderBottom: "1px solid var(--bg-tertiary)", cursor: "pointer", background: n.unread ? "var(--bg-primary)" : "#fff", display: "flex", gap: 12, position: "relative" }}>
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: n.color, flexShrink: 0, marginTop: 6 }} />
-                    <div>
-                      <div style={{ fontSize: 13, color: "var(--text-primary)", fontWeight: n.unread ? 600 : 400, lineHeight: 1.4 }}>{n.text}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, color: "var(--text-primary)", fontWeight: n.unread ? 600 : 400, lineHeight: 1.4, paddingRight: 24 }}>{n.text}</div>
                       <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>{n.time}</div>
                     </div>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); setNotifs(p => p.filter(x => x.id !== n.id)); }}
+                      style={{ position: "absolute", right: 12, top: 16, background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 4 }}
+                    >
+                      <X size={14} />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -113,10 +120,18 @@ export default function Topbar({ nav, score, unreadCount, USER, showNotif, setSh
                 <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{USER.name}</div>
                 <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>{USER.email}</div>
               </div>
-              <button style={{ width: "100%", padding: "10px 12px", textAlign: "left", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, color: "var(--text-primary)", borderRadius: "var(--radius-sm)" }}
+              <button 
+                onClick={() => { setNav("settings"); setShowProf(false); }}
+                style={{ width: "100%", padding: "10px 12px", textAlign: "left", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, color: "var(--text-primary)", borderRadius: "var(--radius-sm)" }}
                 onMouseEnter={e => e.currentTarget.style.background = "var(--bg-tertiary)"}
                 onMouseLeave={e => e.currentTarget.style.background = "none"}>Account Settings</button>
               <button style={{ width: "100%", padding: "10px 12px", textAlign: "left", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, color: "var(--color-danger)", borderRadius: "var(--radius-sm)" }}
+                onClick={() => {
+                  localStorage.removeItem("hg_token");
+                  localStorage.removeItem("hg_user");
+                  localStorage.removeItem("hg_profile");
+                  window.location.href = "/";
+                }}
                 onMouseEnter={e => e.currentTarget.style.background = "#FEE2E2"}
                 onMouseLeave={e => e.currentTarget.style.background = "none"}>Sign Out</button>
             </div>
