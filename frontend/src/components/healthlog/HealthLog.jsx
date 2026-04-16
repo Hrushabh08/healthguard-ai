@@ -191,7 +191,6 @@ export default function HealthLog({ isGuest, navigate }) {
       const idx = logs.findIndex(l => l.date === updatedLog.date);
       if (idx >= 0) logs[idx] = updatedLog;
       else logs.unshift(updatedLog);
-      logs = logs.slice(0, 30);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
       setAllLogs(logs);
     }
@@ -210,8 +209,10 @@ export default function HealthLog({ isGuest, navigate }) {
   // Stress slider color
   const stressColor = (v) => v <= 3 ? "var(--color-success)" : v <= 6 ? "var(--color-warning)" : "var(--color-danger)";
 
-  // Recent entries (excluding today)
-  const recentEntries = allLogs.filter(l => l.date !== todayStr()).slice(0, 7);
+  // Previous logs (excluding today), sorted by date descending
+  const previousLogs = [...allLogs]
+    .filter(l => l.date !== todayStr())
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
 
   return (
     <div className="fade-in">
@@ -647,9 +648,9 @@ export default function HealthLog({ isGuest, navigate }) {
       <button className="dl-history-toggle" onClick={() => setShowHistory(!showHistory)}>
         <h4>
           <Clock size={16} />
-          Recent Entries
-          {recentEntries.length > 0 && (
-            <span className="badge info" style={{ marginLeft: 6, fontSize: 10, padding: "3px 8px" }}>{recentEntries.length}</span>
+          Previous Logs
+          {previousLogs.length > 0 && (
+            <span className="badge info" style={{ marginLeft: 6, fontSize: 10, padding: "3px 8px" }}>{previousLogs.length}</span>
           )}
         </h4>
         <ChevronDown size={18} className={`dl-chevron ${showHistory ? "open" : ""}`} />
@@ -657,12 +658,12 @@ export default function HealthLog({ isGuest, navigate }) {
 
       {showHistory && (
         <div className="dl-history-list">
-          {recentEntries.length === 0 ? (
+          {previousLogs.length === 0 ? (
             <div className="dl-history-empty">
               No previous entries yet. Start logging daily!
             </div>
           ) : (
-            recentEntries.map(entry => {
+            previousLogs.map(entry => {
               const ls = entry.lifestyle || {};
               return (
                 <div

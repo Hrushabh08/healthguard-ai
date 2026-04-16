@@ -14,7 +14,6 @@ router.get("/", async (req, res) => {
   try {
     const logs = await HealthLog.find({ userId: req.user.id })
       .sort({ date: -1 })
-      .limit(30)
       .lean();
 
     res.json({ success: true, logs });
@@ -99,6 +98,19 @@ router.post("/", async (req, res) => {
     res.json({ success: true, message: "Log saved.", log });
   } catch (err) {
     console.error("Save log error:", err.message);
+    res.status(500).json({ success: false, message: "Server error." });
+  }
+});
+
+// ──────────────────────────────────────────
+// DELETE /api/logs — Delete ALL logs for user
+// ──────────────────────────────────────────
+router.delete("/", async (req, res) => {
+  try {
+    await HealthLog.deleteMany({ userId: req.user.id });
+    res.json({ success: true, message: "All logs cleared successfully." });
+  } catch (err) {
+    console.error("Delete all logs error:", err.message);
     res.status(500).json({ success: false, message: "Server error." });
   }
 });

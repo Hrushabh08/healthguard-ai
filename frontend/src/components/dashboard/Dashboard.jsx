@@ -73,22 +73,6 @@ export default function Dashboard() {
 
   const [authUser, setAuthUser] = useState(null);
 
-  // Load profile & auto-update age from DOB
-  useEffect(() => {
-    // Load Auth User
-    try {
-      const u = localStorage.getItem("hg_user");
-      if (u) {
-        setAuthUser(JSON.parse(u));
-        // Fetch full profile from API synchronously with mount
-        loadFullProfile();
-      } else {
-        setAuthUser(null);
-        setProfile(null);
-      }
-    } catch { /* ignore */ }
-  }, []);
-
   const loadFullProfile = async () => {
     try {
       const { data } = await authAPI.getMe();
@@ -105,6 +89,22 @@ export default function Dashboard() {
       console.error("Error loading profile:", err);
     }
   };
+
+  // Load profile & auto-update age from DOB
+  useEffect(() => {
+    // Load Auth User
+    try {
+      const u = localStorage.getItem("hg_user");
+      if (u) {
+        setAuthUser(JSON.parse(u));
+        // Fetch full profile from API synchronously with mount
+        loadFullProfile();
+      } else {
+        setAuthUser(null);
+        setProfile(null);
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   // Build USER object from profile
   const USER = profile
@@ -391,8 +391,8 @@ export default function Dashboard() {
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-                <MicroGoals isGuest={isGuest} />
-                <VoiceInput isGuest={isGuest} />
+                <MicroGoals isGuest={isGuest} navigate={navigate} />
+                <VoiceInput isGuest={isGuest} navigate={navigate} />
               </div>
             </div>
           )}

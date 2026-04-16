@@ -46,6 +46,7 @@ export const logsAPI = {
   getToday: () => API.get("/logs/today"),
   save: (log) => API.post("/logs", log),
   remove: (date) => API.delete(`/logs/${date}`),
+  clearAll: () => API.delete("/logs"),
 };
 
 // ── Family Members ───────────────────────

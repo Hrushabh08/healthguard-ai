@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Bell, Shield, Download, Trash2, Save, Lock } from 'lucide-react';
-import { authAPI } from '../../services/api';
+import { authAPI, logsAPI } from '../../services/api';
 
 export default function AccountSettings({ profile, updateProfileSettings, isGuest, navigate }) {
   const [activeTab, setActiveTab] = useState("profile");
@@ -9,6 +9,8 @@ export default function AccountSettings({ profile, updateProfileSettings, isGues
     medicationReminder: false,
     riskAlerts: true,
   });
+
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -45,6 +47,20 @@ export default function AccountSettings({ profile, updateProfileSettings, isGues
   const handleProfileSave = async () => {
     if (updateProfileSettings) {
       await updateProfileSettings(formData);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    try {
+      const { data } = await logsAPI.clearAll();
+      if (data.success) {
+        setConfirmClear(false);
+        alert("Your health history has been permanently cleared.");
+        // Refresh or handle UI state update if needed
+      }
+    } catch (err) {
+      console.error("Error clearing history:", err);
+      alert("Failed to clear history. Please try again.");
     }
   };
 
@@ -173,17 +189,57 @@ export default function AccountSettings({ profile, updateProfileSettings, isGues
                 </div>
               </button>
 
+              <div style={{ padding: "16px", border: "1px solid #FECACA", background: "#FEF2F2", borderRadius: "var(--radius-sm)" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", marginBottom: 16 }}>
+                  <Trash2 size={18} style={{ marginRight: 12, color: "var(--color-danger)", marginTop: 2 }} />
+                  <div style={{ textAlign: "left" }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--color-danger)" }}>Clear Account History</div>
+                    <div style={{ fontSize: 12, color: "#991B1B", marginTop: 2 }}>
+                      Permanently delete all your health logs from our database. This action is lifetime and cannot be undone.
+                    </div>
+                  </div>
+                </div>
+                
+                {confirmClear ? (
+                  <div className="fade-in" style={{ display: "flex", gap: 8 }}>
+                    <button 
+                      onClick={handleClearHistory}
+                      className="primary-btn" 
+                      style={{ background: "var(--color-danger)", padding: "6px 16px", fontSize: 12, flex: 1 }}
+                    >
+                      Yes, Clear Everything
+                    </button>
+                    <button 
+                      onClick={() => setConfirmClear(false)}
+                      className="ghost-btn" 
+                      style={{ padding: "6px 16px", fontSize: 12, flex: 1, border: "1px solid var(--border-color)" }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      if (isGuest) return navigate('/login');
+                      setConfirmClear(true);
+                    }}
+                    style={{ 
+                      width: "100%", padding: "8px", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-danger)",
+                      background: "transparent", color: "var(--color-danger)", fontWeight: 600, fontSize: 12, cursor: "pointer"
+                    }}
+                  >
+                    Clear History
+                  </button>
+                )}
+              </div>
+
               <button className="ghost-btn" onClick={() => {
                 localStorage.clear();
                 window.location.href = "/";
               }} style={{ 
-                justifyContent: "flex-start", padding: "16px", border: "1px solid #FECACA", background: "#FEF2F2" 
+                justifyContent: "flex-start", padding: "12px", border: "1px solid var(--border-color)", background: "transparent"
               }}>
-                <Trash2 size={18} style={{ marginRight: 12, color: "var(--color-danger)" }} />
-                <div style={{ textAlign: "left" }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "var(--color-danger)" }}>Clear Local Data</div>
-                  <div style={{ fontSize: 12, color: "#991B1B", marginTop: 2 }}>Remove all localized data on this device. Log out immediately.</div>
-                </div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Sign out & Clear Browser Cache</div>
               </button>
             </div>
           </div>
