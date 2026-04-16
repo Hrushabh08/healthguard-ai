@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { User, Bell, Shield, Download, Trash2, Save } from 'lucide-react';
+import { User, Bell, Shield, Download, Trash2, Save, Lock } from 'lucide-react';
 import { authAPI } from '../../services/api';
 
-export default function AccountSettings({ profile, updateProfileSettings }) {
+export default function AccountSettings({ profile, updateProfileSettings, isGuest, navigate }) {
   const [activeTab, setActiveTab] = useState("profile");
   const [settings, setSettings] = useState({
     dailyReminder: true,
@@ -78,13 +78,13 @@ export default function AccountSettings({ profile, updateProfileSettings }) {
             <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 24, color: "var(--text-primary)" }}>Personal Information</h3>
             
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div>
+              <div className={isGuest ? "guest-blurred" : ""}>
                 <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>Full Name</label>
                 <input type="text" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})}
                   style={{ width: "100%", padding: "10px 14px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)", background: "var(--bg-primary)" }} />
               </div>
 
-              <div style={{ display: "flex", gap: 16 }}>
+              <div style={{ display: "flex", gap: 16 }} className={isGuest ? "guest-blurred" : ""}>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>Weight (kg)</label>
                   <input type="number" value={formData.weight} onChange={e => setFormData({...formData, weight: e.target.value})}
@@ -97,15 +97,24 @@ export default function AccountSettings({ profile, updateProfileSettings }) {
                 </div>
               </div>
 
-              <div>
+              <div className={isGuest ? "guest-blurred" : ""}>
                 <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>Date of Birth</label>
                 <input type="date" value={formData.dob} onChange={e => setFormData({...formData, dob: e.target.value})}
                   style={{ width: "100%", padding: "10px 14px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)", background: "var(--bg-primary)" }} />
               </div>
 
-              <button className="primary-btn" onClick={handleProfileSave} style={{ marginTop: 16, alignSelf: "flex-start", display: "flex", gap: 8 }}>
-                <Save size={16} /> Save Changes
-              </button>
+              {isGuest ? (
+                <div className="guest-overlay-container" style={{ marginTop: 16, alignSelf: "flex-start" }}>
+                  <button className="primary-btn" onClick={() => navigate('/login')} style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+                    <Lock size={16} /> Login to Continue
+                  </button>
+                  <div className="guest-tooltip">Please login to save your settings</div>
+                </div>
+              ) : (
+                <button className="primary-btn" onClick={handleProfileSave} style={{ marginTop: 16, alignSelf: "flex-start", display: "flex", gap: 8 }}>
+                  <Save size={16} /> Save Changes
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -127,10 +136,14 @@ export default function AccountSettings({ profile, updateProfileSettings }) {
                     <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>{item.desc}</div>
                   </div>
                   <div 
-                    onClick={() => handleSettingsToggle(item.id)}
+                    onClick={() => {
+                      if (isGuest) return navigate('/login');
+                      handleSettingsToggle(item.id);
+                    }}
                     style={{ 
                       width: 44, height: 24, borderRadius: 12, background: settings[item.id] ? "var(--color-success)" : "var(--border-color)",
-                      position: "relative", cursor: "pointer", transition: "all 0.2s", flexShrink: 0, marginTop: 4
+                      position: "relative", cursor: "pointer", transition: "all 0.2s", flexShrink: 0, marginTop: 4,
+                      opacity: isGuest ? 0.6 : 1
                     }}
                   >
                     <div style={{ 

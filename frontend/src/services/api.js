@@ -18,10 +18,12 @@ API.interceptors.request.use((config) => {
 API.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    const hasSession = localStorage.getItem("hg_token") || localStorage.getItem("hg_user");
+    if (err.response?.status === 401 && hasSession) {
       localStorage.removeItem("hg_token");
       localStorage.removeItem("hg_user");
-      // Redirect to login if token expired
+      localStorage.removeItem("hg_profile");
+      // Only redirect if we're not already on the home page
       if (window.location.pathname !== "/") {
         window.location.href = "/";
       }

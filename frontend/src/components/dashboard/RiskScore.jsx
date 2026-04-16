@@ -39,14 +39,14 @@ function RiskRing({ score, size = 220, strokeW = 16 }) {
   );
 }
 
-export default function RiskScore({ score, sleep, stress, activity }) {
+export default function RiskScore({ score, sleep, stress, activity, isGuest }) {
   const riskLabel = score >= 70 ? "High Risk" : score >= 50 ? "Moderate Risk" : "Healthy Range";
   const riskColor = score >= 70 ? "var(--color-danger)" : score >= 50 ? "var(--color-warning)" : "var(--color-success)";
 
   const factors = [
-    { label: "Rest Deprivation", pts: Math.round(Math.max(0, (8 - sleep) / 8) * 100 * 0.35), weight: "35 pts", color: "var(--color-purple)", icon: <Wind size={18} /> },
-    { label: "Stress/Cortisol Load", pts: Math.round(stress * 0.40), weight: "40 pts", color: "var(--color-danger)", icon: <Activity size={18} /> },
-    { label: "Sedentary Behavior", pts: Math.round(Math.max(0, (10000 - activity) / 10000) * 100 * 0.25), weight: "25 pts", color: "var(--color-warning)", icon: <Heart size={18} /> },
+    { label: "Rest Deprivation", pts: isGuest ? 0 : Math.round(Math.max(0, (8 - sleep) / 8) * 100 * 0.35), weight: "35 pts", color: "var(--color-purple)", icon: <Wind size={18} /> },
+    { label: "Stress/Cortisol Load", pts: isGuest ? 0 : Math.round(stress * 0.40), weight: "40 pts", color: "var(--color-danger)", icon: <Activity size={18} /> },
+    { label: "Sedentary Behavior", pts: isGuest ? 0 : Math.round(Math.max(0, (10000 - activity) / 10000) * 100 * 0.25), weight: "25 pts", color: "var(--color-warning)", icon: <Heart size={18} /> },
   ].sort((a,b)=> b.pts - a.pts);
 
   return (

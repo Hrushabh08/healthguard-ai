@@ -1,7 +1,7 @@
 import React from 'react';
-import { FileText, Download, AlertCircle, CheckCircle } from 'lucide-react';
+import { FileText, Download, AlertCircle, CheckCircle, Lock } from 'lucide-react';
 
-export default function DoctorReadySummary({ score, sleep, stress, activity, water, todayLog }) {
+export default function DoctorReadySummary({ score, sleep, stress, activity, water, todayLog, isGuest, hideData, navigate }) {
   const riskLabel = score >= 70 ? "High Risk" : score >= 50 ? "Moderate Risk" : "Low Risk";
   const riskColor = score >= 70 ? "var(--color-danger)" : score >= 50 ? "var(--color-warning)" : "var(--color-success)";
 
@@ -17,96 +17,113 @@ export default function DoctorReadySummary({ score, sleep, stress, activity, wat
   const steps = activity || 0;
 
   // Build dynamic report bullets
-  const bullets = [];
+  let bullets = [];
 
-  // Overall score
-  bullets.push(
-    `Patient's current risk score is <strong>${score}/100</strong> (${riskLabel}), computed from daily self-reported lifestyle metrics and vitals.`
-  );
-
-  // Sleep
-  if (sleepHrs < 7) {
-    bullets.push(
-      `Sleep logged at <strong>${sleepHrs} hrs</strong>, below the recommended 7-8 hour threshold. Chronic sleep deficit correlates with elevated cortisol and metabolic risk.`
-    );
+  if (hideData) {
+    if (isGuest) {
+      bullets = [
+        "No health data has been logged for this guest session.",
+        "Login to record your vitals, habits, and symptoms to generate a clinical-grade summary for your physician.",
+        "The current analysis shows a baseline <strong>0/100</strong> Risk Score."
+      ];
+    } else {
+      bullets = [
+        "No health data has been logged for today.",
+        "Go to the <strong>Daily Log</strong> section to record your vitals and habits.",
+        "Once recorded, this report will provide a clinical-grade summary for your physician.",
+        "The current analysis shows a baseline <strong>0/100</strong> Risk Score."
+      ];
+    }
   } else {
+    // Overall score
     bullets.push(
-      `Sleep duration adequate at <strong>${sleepHrs} hrs/night</strong>. No sleep-related risk flags.`
+      `Patient's current risk score is <strong>${score}/100</strong> (${riskLabel}), computed from daily self-reported lifestyle metrics and vitals.`
     );
-  }
 
-  // Vitals
-  if (vitals.heartRate || vitals.bpSys) {
-    let vitalStr = "Self-reported vitals: ";
-    const vitalParts = [];
-    if (vitals.heartRate) {
-      const hrStatus = vitals.heartRate < 60 || vitals.heartRate > 100 ? " (outside normal)" : " (normal)";
-      vitalParts.push(`HR ${vitals.heartRate} bpm${hrStatus}`);
+    // Sleep
+    if (sleepHrs < 7) {
+      bullets.push(
+        `Sleep logged at <strong>${sleepHrs} hrs</strong>, below the recommended 7-8 hour threshold. Chronic sleep deficit correlates with elevated cortisol and metabolic risk.`
+      );
+    } else {
+      bullets.push(
+        `Sleep duration adequate at <strong>${sleepHrs} hrs/night</strong>. No sleep-related risk flags.`
+      );
     }
-    if (vitals.bpSys) {
-      const bpStatus = vitals.bpSys > 130 || vitals.bpDia > 85 ? " (elevated)" : " (within range)";
-      vitalParts.push(`BP ${vitals.bpSys}/${vitals.bpDia} mmHg${bpStatus}`);
+
+    // Vitals
+    if (vitals.heartRate || vitals.bpSys) {
+      let vitalStr = "Self-reported vitals: ";
+      const vitalParts = [];
+      if (vitals.heartRate) {
+        const hrStatus = vitals.heartRate < 60 || vitals.heartRate > 100 ? " (outside normal)" : " (normal)";
+        vitalParts.push(`HR ${vitals.heartRate} bpm${hrStatus}`);
+      }
+      if (vitals.bpSys) {
+        const bpStatus = vitals.bpSys > 130 || vitals.bpDia > 85 ? " (elevated)" : " (within range)";
+        vitalParts.push(`BP ${vitals.bpSys}/${vitals.bpDia} mmHg${bpStatus}`);
+      }
+      if (vitals.spo2) {
+        const spStatus = vitals.spo2 < 95 ? " (low — monitor)" : " (normal)";
+        vitalParts.push(`SpO₂ ${vitals.spo2}%${spStatus}`);
+      }
+      if (vitals.temperature) {
+        const tempStatus = vitals.temperature > 37.5 ? " (elevated)" : " (normal)";
+        vitalParts.push(`Temp ${vitals.temperature}°C${tempStatus}`);
+      }
+      bullets.push(vitalStr + vitalParts.join(", ") + ".");
     }
-    if (vitals.spo2) {
-      const spStatus = vitals.spo2 < 95 ? " (low — monitor)" : " (normal)";
-      vitalParts.push(`SpO₂ ${vitals.spo2}%${spStatus}`);
+
+    // Activity
+    if (steps < 5000) {
+      bullets.push(
+        `Daily activity is <strong>${steps.toLocaleString()} steps</strong>, significantly below the 8,000-step target. Recommend structured exercise or post-meal walking.`
+      );
+    } else {
+      bullets.push(
+        `Daily activity at <strong>${steps.toLocaleString()} steps</strong>. ${steps >= 8000 ? "Meeting recommended target." : "Slightly below optimal; minor improvement suggested."}`
+      );
     }
-    if (vitals.temperature) {
-      const tempStatus = vitals.temperature > 37.5 ? " (elevated)" : " (normal)";
-      vitalParts.push(`Temp ${vitals.temperature}°C${tempStatus}`);
+
+    // Hydration
+    if (water && water < 2) {
+      bullets.push(
+        `Hydration logged at <strong>${water.toFixed(1)}L</strong>, below recommended 2.5L. Dehydration impacts cognitive function and metabolic processes.`
+      );
     }
-    bullets.push(vitalStr + vitalParts.join(", ") + ".");
-  }
 
-  // Activity
-  if (steps < 5000) {
-    bullets.push(
-      `Daily activity is <strong>${steps.toLocaleString()} steps</strong>, significantly below the 8,000-step target. Recommend structured exercise or post-meal walking.`
-    );
-  } else {
-    bullets.push(
-      `Daily activity at <strong>${steps.toLocaleString()} steps</strong>. ${steps >= 8000 ? "Meeting recommended target." : "Slightly below optimal; minor improvement suggested."}`
-    );
-  }
+    // Symptoms & medications
+    if (notes.symptoms?.length > 0) {
+      bullets.push(
+        `Patient reported symptoms: <strong>${notes.symptoms.join(", ")}</strong>. These should be evaluated in clinical context.`
+      );
+    }
+    if (notes.medicines) {
+      bullets.push(
+        `Current medications: <strong>${notes.medicines}</strong>.`
+      );
+    }
+    if (notes.bloodSugar) {
+      const bsStatus = notes.bloodSugar > 100 ? " (elevated — prediabetic range)" : notes.bloodSugar < 70 ? " (low)" : " (normal)";
+      bullets.push(
+        `Fasting blood sugar: <strong>${notes.bloodSugar} mg/dL</strong>${bsStatus}.`
+      );
+    }
 
-  // Hydration
-  if (water && water < 2) {
-    bullets.push(
-      `Hydration logged at <strong>${water.toFixed(1)}L</strong>, below recommended 2.5L. Dehydration impacts cognitive function and metabolic processes.`
-    );
-  }
-
-  // Symptoms & medications
-  if (notes.symptoms?.length > 0) {
-    bullets.push(
-      `Patient reported symptoms: <strong>${notes.symptoms.join(", ")}</strong>. These should be evaluated in clinical context.`
-    );
-  }
-  if (notes.medicines) {
-    bullets.push(
-      `Current medications: <strong>${notes.medicines}</strong>.`
-    );
-  }
-  if (notes.bloodSugar) {
-    const bsStatus = notes.bloodSugar > 100 ? " (elevated — prediabetic range)" : notes.bloodSugar < 70 ? " (low)" : " (normal)";
-    bullets.push(
-      `Fasting blood sugar: <strong>${notes.bloodSugar} mg/dL</strong>${bsStatus}.`
-    );
-  }
-
-  // Recommendation
-  if (score >= 70) {
-    bullets.push(
-      "Recommended intervention: Behavioral adjustment targeting stress reduction and 7+ hours of sleep. Consider cardiovascular assessment if elevated vitals persist."
-    );
-  } else if (score >= 50) {
-    bullets.push(
-      "Recommended intervention: Lifestyle optimization focusing on identified weak areas. Follow-up assessment in 2 weeks recommended."
-    );
-  } else {
-    bullets.push(
-      "No acute interventions required. Continue current health maintenance program. Routine follow-up recommended."
-    );
+    // Recommendation
+    if (score >= 70) {
+      bullets.push(
+        "Recommended intervention: Behavioral adjustment targeting stress reduction and 7+ hours of sleep. Consider cardiovascular assessment if elevated vitals persist."
+      );
+    } else if (score >= 50) {
+      bullets.push(
+        "Recommended intervention: Lifestyle optimization focusing on identified weak areas. Follow-up assessment in 2 weeks recommended."
+      );
+    } else {
+      bullets.push(
+        "No acute interventions required. Continue current health maintenance program. Routine follow-up recommended."
+      );
+    }
   }
 
   return (
@@ -121,21 +138,30 @@ export default function DoctorReadySummary({ score, sleep, stress, activity, wat
             <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Auto-generated from your daily log data</p>
           </div>
         </div>
-        <button className="primary-btn" style={{ padding: '8px 14px' }}>
-          <Download size={14} /> Export
-        </button>
+        {isGuest ? (
+          <div className="guest-overlay-container">
+            <button className="primary-btn" onClick={() => navigate('/login')} style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)', padding: '8px 14px' }}>
+              <Lock size={14} /> Login to Export
+            </button>
+            <div className="guest-tooltip">Please login to export reports</div>
+          </div>
+        ) : (
+          <button className="primary-btn" style={{ padding: '8px 14px' }}>
+            <Download size={14} /> Export
+          </button>
+        )}
       </div>
 
       {/* Data source indicator */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px',
         borderRadius: 'var(--radius-sm)', marginBottom: 16, fontSize: 12, fontWeight: 500,
-        background: hasLog ? 'rgba(16,185,129,0.06)' : 'rgba(245,158,11,0.06)',
-        border: `1px solid ${hasLog ? 'rgba(16,185,129,0.2)' : 'rgba(245,158,11,0.2)'}`,
-        color: hasLog ? '#059669' : '#D97706'
+        background: (hasLog && !hideData) ? 'rgba(16,185,129,0.06)' : 'rgba(245,158,11,0.06)',
+        border: `1px solid ${(hasLog && !hideData) ? 'rgba(16,185,129,0.2)' : 'rgba(245,158,11,0.2)'}`,
+        color: (hasLog && !hideData) ? '#059669' : '#D97706'
       }}>
-        {hasLog ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
-        {hasLog ? "Report generated from today's daily log" : "No daily log found — using default values"}
+        {(hasLog && !hideData) ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
+        {hideData ? "No data logged today — showing preview state" : (hasLog ? "Report generated from today's daily log" : "No daily log found — using default values")}
       </div>
 
       {/* Risk Score Badge */}

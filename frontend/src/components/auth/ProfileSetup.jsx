@@ -102,6 +102,7 @@ export default function ProfileSetup() {
         // Save to database
         try {
           await authAPI.updateProfile({
+            name: fullName.trim(),
             dob,
             weight: parseFloat(weight),
             height: parseFloat(height),

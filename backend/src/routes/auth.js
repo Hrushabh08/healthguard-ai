@@ -271,9 +271,12 @@ router.get("/me", auth, async (req, res) => {
 // ──────────────────────────────────────────
 router.put("/profile", auth, async (req, res) => {
   try {
-    const { dob, weight, height } = req.body;
+    const { name, dob, weight, height } = req.body;
 
     const updateData = {};
+    if (name !== undefined) {
+      // name is a top-level field, not inside profile object
+    }
     if (dob !== undefined) updateData["profile.dob"] = dob;
     if (weight !== undefined) updateData["profile.weight"] = weight;
     if (height !== undefined) updateData["profile.height"] = height;
@@ -282,9 +285,12 @@ router.put("/profile", auth, async (req, res) => {
     }
     updateData["profile.lastUpdated"] = new Date();
 
+    const updateFields = { $set: updateData };
+    if (name !== undefined) updateFields.$set.name = name;
+
     const user = await User.findByIdAndUpdate(
       req.user.id,
-      { $set: updateData },
+      updateFields,
       { new: true, runValidators: true }
     );
 

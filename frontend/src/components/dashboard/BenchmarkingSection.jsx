@@ -1,7 +1,7 @@
 import React from 'react';
 import { Users, TrendingDown } from 'lucide-react';
 
-export default function BenchmarkingSection({ userScore }) {
+export default function BenchmarkingSection({ userScore, isGuest, hideData }) {
   // Mock data for demographic distribution
   const distribution = [
     { range: '0-20', count: 5, label: 'Low Risk' },
@@ -14,7 +14,7 @@ export default function BenchmarkingSection({ userScore }) {
   const maxCount = Math.max(...distribution.map(d => d.count));
 
   // Determine user's bucket index
-  const userBucketIndex = Math.min(4, Math.floor(userScore / 20));
+  const userBucketIndex = hideData ? -1 : Math.min(4, Math.floor(userScore / 20));
 
   return (
     <div className="card fade-in">
@@ -30,7 +30,7 @@ export default function BenchmarkingSection({ userScore }) {
 
       <div style={{ display: 'flex', alignItems: 'flex-end', height: 120, gap: 8, paddingBottom: 24, borderBottom: '1px solid var(--border-color)', position: 'relative' }}>
         {distribution.map((d, i) => {
-          const isUserBucket = i === userBucketIndex;
+          const isUserBucket = !hideData && i === userBucketIndex;
           const heightPct = (d.count / maxCount) * 100;
           
           return (
@@ -60,7 +60,11 @@ export default function BenchmarkingSection({ userScore }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <TrendingDown size={16} color="var(--color-success)" />
           <span style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 500 }}>
-             You are in the top <strong>35%</strong> of your demographic
+             {isGuest 
+               ? "Login to compare your metrics with your demographic benchmark." 
+               : hideData 
+                 ? "Log your first daily entry to see demographic benchmarks."
+                 : `You are in the top 35% of your demographic`}
           </span>
         </div>
       </div>

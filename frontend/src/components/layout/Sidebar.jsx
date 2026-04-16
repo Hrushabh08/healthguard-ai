@@ -4,7 +4,7 @@ import {
   LogOut, Shield, ClipboardPlus, Settings
 } from 'lucide-react';
 
-export default function Sidebar({ nav, setNav, sidebar, setSidebar, navigate }) {
+export default function Sidebar({ nav, setNav, sidebar, setSidebar, navigate, isGuest }) {
   const NAV_ITEMS = [
     { id: "dashboard", icon: <Home size={18} />,           label: "Dashboard" },
     { id: "log",       icon: <ClipboardPlus size={18} />,  label: "Daily Log" },
@@ -72,40 +72,42 @@ export default function Sidebar({ nav, setNav, sidebar, setSidebar, navigate }) 
       </nav>
 
       {/* Settings / Logout */}
-      <div style={{ padding: "16px 12px", borderTop: "1px solid var(--border-color)", display: "flex", flexDirection: "column", gap: 4 }}>
-        <div onClick={() => setNav("settings")}
-          style={{
-            display: "flex", alignItems: "center", gap: 12, padding: "12px 14px",
-            borderRadius: "var(--radius-sm)", cursor: "pointer", 
-            justifyContent: sidebar ? "flex-start" : "center",
-            background: nav === "settings" ? "var(--bg-tertiary)" : "transparent",
-            color: nav === "settings" ? "var(--text-primary)" : "var(--text-secondary)",
-            fontWeight: nav === "settings" ? 600 : 500, fontSize: 13, transition: "all 0.15s"
-          }}
-          onMouseEnter={(e) => { if (nav !== "settings") e.currentTarget.style.color = "var(--text-primary)"; }}
-          onMouseLeave={(e) => { if (nav !== "settings") e.currentTarget.style.color = "var(--text-secondary)"; }}
-        >
-          <span style={{ color: nav === "settings" ? "var(--color-accent)" : "inherit" }}>
-            <Settings size={18} />
-          </span>
-          {sidebar && <span>Settings</span>}
-        </div>
+      {!isGuest && (
+        <div style={{ padding: "16px 12px", borderTop: "1px solid var(--border-color)", display: "flex", flexDirection: "column", gap: 4 }}>
+          <div onClick={() => setNav("settings")}
+            style={{
+              display: "flex", alignItems: "center", gap: 12, padding: "12px 14px",
+              borderRadius: "var(--radius-sm)", cursor: "pointer", 
+              justifyContent: sidebar ? "flex-start" : "center",
+              background: nav === "settings" ? "var(--bg-tertiary)" : "transparent",
+              color: nav === "settings" ? "var(--text-primary)" : "var(--text-secondary)",
+              fontWeight: nav === "settings" ? 600 : 500, fontSize: 13, transition: "all 0.15s"
+            }}
+            onMouseEnter={(e) => { if (nav !== "settings") e.currentTarget.style.color = "var(--text-primary)"; }}
+            onMouseLeave={(e) => { if (nav !== "settings") e.currentTarget.style.color = "var(--text-secondary)"; }}
+          >
+            <span style={{ color: nav === "settings" ? "var(--color-accent)" : "inherit" }}>
+              <Settings size={18} />
+            </span>
+            {sidebar && <span>Settings</span>}
+          </div>
 
-        <div onClick={() => {
-            localStorage.removeItem("hg_token");
-            localStorage.removeItem("hg_user");
-            localStorage.removeItem("hg_profile");
-            window.location.href = "/";
-          }}
-          style={{
-            display: "flex", alignItems: "center", gap: 12, padding: "12px 14px",
-            borderRadius: "var(--radius-sm)", cursor: "pointer", color: "var(--color-danger)",
-            justifyContent: sidebar ? "flex-start" : "center", fontSize: 13, fontWeight: 500
-          }}>
-          <LogOut size={18} />
-          {sidebar && <span>Sign Out</span>}
+          <div onClick={() => {
+              Object.keys(localStorage).forEach(key => {
+                if (key.startsWith('hg_')) localStorage.removeItem(key);
+              });
+              window.location.href = "/";
+            }}
+            style={{
+              display: "flex", alignItems: "center", gap: 12, padding: "12px 14px",
+              borderRadius: "var(--radius-sm)", cursor: "pointer", color: "var(--color-danger)",
+              justifyContent: sidebar ? "flex-start" : "center", fontSize: 13, fontWeight: 500
+            }}>
+            <LogOut size={18} />
+            {sidebar && <span>Sign Out</span>}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

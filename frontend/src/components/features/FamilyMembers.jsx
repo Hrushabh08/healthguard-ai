@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Users, Plus, X, ChevronDown, ChevronUp, Droplets, Moon, Footprints,
   Wine, Cigarette, UtensilsCrossed, Heart, Edit3, Trash2, UserPlus, Calendar, Activity,
-  Scale, Ruler, Cake, Wind, Save, Check, Mail, Stethoscope, Coffee, Pill
+  Scale, Ruler, Cake, Wind, Save, Check, Mail, Stethoscope, Coffee, Pill, Lock
 } from 'lucide-react';
 
 const COMMON_SYMPTOMS = [
@@ -87,7 +87,7 @@ function stressColor(v) {
   return v <= 3 ? "var(--color-success)" : v <= 6 ? "var(--color-warning)" : "var(--color-danger)";
 }
 
-export default function FamilyMembers() {
+export default function FamilyMembers({ userEmail, isGuest, navigate }) {
   const [members, setMembers] = useState([]);
   const [linkStatuses, setLinkStatuses] = useState({}); // { [memberId]: true|false|null }
   const [showAddModal, setShowAddModal] = useState(false);
@@ -107,6 +107,7 @@ export default function FamilyMembers() {
 
   // Load from API
   useEffect(() => {
+    if (isGuest) return;
     const loadMembers = async () => {
       try {
         const { data } = await membersAPI.getAll();
@@ -135,11 +136,7 @@ export default function FamilyMembers() {
           setLinkStatuses(statusMap);
         }
       } catch {
-        // Fallback: try localStorage
-        try {
-          const raw = localStorage.getItem(STORAGE_KEY);
-          if (raw) setMembers(JSON.parse(raw));
-        } catch { /* ignore */ }
+        // Rely on API only
       }
     };
     loadMembers();
@@ -242,9 +239,18 @@ export default function FamilyMembers() {
             Track daily health data for your family. {members.length} member{members.length !== 1 ? 's' : ''} added.
           </p>
         </div>
-        <button className="primary-btn" onClick={() => setShowAddModal(true)}>
-          <UserPlus size={15} /> Add Member
-        </button>
+        {isGuest ? (
+          <div className="guest-overlay-container">
+            <button className="primary-btn" onClick={() => navigate('/login')} style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+              <Lock size={15} /> Login to Continue
+            </button>
+            <div className="guest-tooltip">Please login to add family members</div>
+          </div>
+        ) : (
+          <button className="primary-btn" onClick={() => setShowAddModal(true)}>
+            <UserPlus size={15} /> Add Member
+          </button>
+        )}
       </div>
 
       {/* Member Cards */}
@@ -555,9 +561,17 @@ export default function FamilyMembers() {
           <Users size={40} color="var(--border-color)" style={{ marginBottom: 12 }} />
           <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>No family members yet</p>
           <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Add family members to track their health alongside yours.</p>
-          <button className="primary-btn" style={{ marginTop: 16 }} onClick={() => setShowAddModal(true)}>
-            <UserPlus size={15} /> Add First Member
-          </button>
+          {isGuest ? (
+            <div className="guest-overlay-container" style={{ marginTop: 16 }}>
+              <button className="primary-btn" onClick={() => navigate('/login')} style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+                <Lock size={15} /> Login to Continue
+              </button>
+            </div>
+          ) : (
+            <button className="primary-btn" style={{ marginTop: 16 }} onClick={() => setShowAddModal(true)}>
+              <UserPlus size={15} /> Add First Member
+            </button>
+          )}
         </div>
       )}
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import {
-  Heart, Moon, Footprints, Droplets, Save, Check,
+  Heart, Moon, Footprints, Droplets, Save, Check, Lock,
   ChevronDown, Clock, Edit3, Activity, Cigarette,
   Wine, UtensilsCrossed, Pill, Thermometer, Wind,
   Coffee, Stethoscope, ChevronUp
@@ -87,7 +87,7 @@ function scoreLabel(s) {
 }
 
 // ── Component ──────────────────────────────────────────
-export default function HealthLog() {
+export default function HealthLog({ isGuest, navigate }) {
   const [log, setLog] = useState(emptyLog());
   const [saved, setSaved] = useState(false);
   const [showToast, setShowToast] = useState(false);
@@ -127,6 +127,7 @@ export default function HealthLog() {
 
   // Load today's log + history from API
   useEffect(() => {
+    if (isGuest) return;
     const loadData = async () => {
       try {
         const [todayRes, allRes] = await Promise.all([
@@ -136,16 +137,7 @@ export default function HealthLog() {
         if (allRes.data.logs) setAllLogs(allRes.data.logs);
         if (todayRes.data.log) setLog(todayRes.data.log);
       } catch {
-        // Fallback: try localStorage
-        try {
-          const raw = localStorage.getItem(STORAGE_KEY);
-          if (raw) {
-            const logs = JSON.parse(raw).map(migrateEntry);
-            setAllLogs(logs);
-            const today = logs.find(l => l.date === todayStr());
-            if (today) setLog(today);
-          }
-        } catch { /* ignore */ }
+         // Rely on API only. Do not load legacy local testing data.
       }
     };
     loadData();
@@ -248,11 +240,11 @@ export default function HealthLog() {
           </div>
           <div className="dl-score-card">
             <div className="dl-score-label">Live Risk Score</div>
-            <div className="dl-score-value" style={{ color: scoreColor(liveScore) }}>
-              {liveScore}
+            <div className="dl-score-value" style={{ color: scoreColor((isGuest || filledCount === 0) ? 0 : liveScore) }}>
+              {(isGuest || filledCount === 0) ? 0 : liveScore}
             </div>
-            <div className="dl-score-status" style={{ background: scoreColor(liveScore) + "18", color: scoreColor(liveScore) }}>
-              {scoreLabel(liveScore)}
+            <div className="dl-score-status" style={{ background: scoreColor((isGuest || filledCount === 0) ? 0 : liveScore) + "18", color: scoreColor((isGuest || filledCount === 0) ? 0 : liveScore) }}>
+              {filledCount === 0 ? "New Session" : scoreLabel(liveScore)}
             </div>
           </div>
         </div>
@@ -271,7 +263,7 @@ export default function HealthLog() {
           {vitalsFilled && <span className="dl-filled-dot" />}
         </div>
 
-        <div className="dl-grid dl-grid-2">
+        <div className={`dl-grid dl-grid-2 ${isGuest ? 'guest-blurred' : ''}`}>
           <div className="dl-field">
             <label>Heart Rate <span className="dl-unit">(bpm)</span></label>
             <input
@@ -374,11 +366,13 @@ export default function HealthLog() {
               {log.lifestyle.sleep}h
             </span>
           </label>
-          <input
-            type="range" min="0" max="14" step="0.5"
-            value={log.lifestyle.sleep}
-            onChange={e => upd("lifestyle", "sleep", parseFloat(e.target.value))}
-          />
+          <div className={isGuest ? 'guest-blurred' : ''}>
+            <input
+              type="range" min="0" max="14" step="0.5"
+              value={log.lifestyle.sleep}
+              onChange={e => upd("lifestyle", "sleep", parseFloat(e.target.value))}
+            />
+          </div>
           <div className="dl-range-labels">
             <span>0h</span><span>7h ideal</span><span>14h</span>
           </div>
@@ -396,11 +390,13 @@ export default function HealthLog() {
             </span>
             <span className="dl-unit">/10</span>
           </label>
-          <input
-            type="range" min="1" max="10" step="1"
-            value={log.lifestyle.stress}
-            onChange={e => upd("lifestyle", "stress", parseInt(e.target.value))}
-          />
+          <div className={isGuest ? 'guest-blurred' : ''}>
+            <input
+              type="range" min="1" max="10" step="1"
+              value={log.lifestyle.stress}
+              onChange={e => upd("lifestyle", "stress", parseInt(e.target.value))}
+            />
+          </div>
           <div className="dl-range-labels">
             <span>Calm</span><span>Very Stressed</span>
           </div>
@@ -414,7 +410,7 @@ export default function HealthLog() {
           </label>
           <input
             type="number"
-            className={`dl-input ${getRange(log.lifestyle.steps, 5000, 30000)}`}
+            className={`dl-input ${getRange(log.lifestyle.steps, 5000, 30000)} ${isGuest ? 'guest-blurred' : ''}`}
             value={log.lifestyle.steps}
             placeholder="8000"
             onChange={e => upd("lifestyle", "steps", e.target.value)}
@@ -437,11 +433,13 @@ export default function HealthLog() {
               {log.lifestyle.waterIntake.toFixed(1)}L
             </span>
           </label>
-          <input
-            type="range" min="0" max="5" step="0.1"
-            value={log.lifestyle.waterIntake}
-            onChange={e => upd("lifestyle", "waterIntake", parseFloat(e.target.value))}
-          />
+          <div className={isGuest ? 'guest-blurred' : ''}>
+            <input
+              type="range" min="0" max="5" step="0.1"
+              value={log.lifestyle.waterIntake}
+              onChange={e => upd("lifestyle", "waterIntake", parseFloat(e.target.value))}
+            />
+          </div>
           <div className="dl-range-labels">
             <span>0L</span><span>2.5L ideal</span><span>5L</span>
           </div>
@@ -455,7 +453,7 @@ export default function HealthLog() {
             <UtensilsCrossed size={14} className="dl-field-icon" />
             Meals Today
           </label>
-          <div className="dl-grid dl-grid-3">
+          <div className={`dl-grid dl-grid-3 ${isGuest ? 'guest-blurred' : ''}`}>
             {["breakfast", "lunch", "dinner"].map(meal => (
               <div
                 key={meal}
@@ -472,7 +470,7 @@ export default function HealthLog() {
         <div className="dl-divider" />
 
         {/* Habits toggles */}
-        <div className="dl-habits-row">
+        <div className={`dl-habits-row ${isGuest ? 'guest-blurred' : ''}`}>
           <div className="toggle-row">
             <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
               <div className="toggle-icon" style={{
@@ -539,7 +537,7 @@ export default function HealthLog() {
         </button>
 
         {showNotes && (
-          <div className="dl-notes-body">
+          <div className={`dl-notes-body ${isGuest ? 'guest-blurred' : ''}`}>
             {/* Mood */}
             <div className="dl-field">
               <label>Mood</label>
@@ -620,16 +618,29 @@ export default function HealthLog() {
       </div>
 
       {/* ═══ SAVE BUTTON ═══ */}
-      <button
-        className={`dl-save-btn ${saved ? "saved" : ""}`}
-        onClick={handleSave}
-      >
-        {saved ? (
-          <><Check size={18} /> Saved Successfully</>
-        ) : (
-          <><Save size={18} /> Save Today's Log</>
-        )}
-      </button>
+      {isGuest ? (
+        <div className="guest-overlay-container" style={{ width: '100%' }}>
+          <button
+            className="dl-save-btn"
+            style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}
+            onClick={() => navigate('/login')}
+          >
+            <Lock size={18} /> Login to Continue
+          </button>
+          <div className="guest-tooltip">Please login to save your health log</div>
+        </div>
+      ) : (
+        <button
+          className={`dl-save-btn ${saved ? "saved" : ""}`}
+          onClick={handleSave}
+        >
+          {saved ? (
+            <><Check size={18} /> Saved Successfully</>
+          ) : (
+            <><Save size={18} /> Save Today's Log</>
+          )}
+        </button>
+      )}
 
       {/* ═══ RECENT ENTRIES ═══ */}
       <div className="dl-divider" />

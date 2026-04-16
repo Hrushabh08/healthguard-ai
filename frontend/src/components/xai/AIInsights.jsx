@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Brain, Target, Activity, Wind, Heart, Moon, Droplets, Utensils } from 'lucide-react';
+import { Brain, Target, Activity, Wind, Heart, Moon, Droplets, Utensils, Lock } from 'lucide-react';
 
-export default function AIInsights({ score, sleep, stress, activity, water, alcohol, smoking, mealsOnTime, todayLog }) {
+export default function AIInsights({ score, sleep, stress, activity, water, alcohol, smoking, mealsOnTime, todayLog, isGuest, hideData, navigate }) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiText, setAiText] = useState("");
   const [showActions, setShowActions] = useState(false);
@@ -146,10 +146,10 @@ export default function AIInsights({ score, sleep, stress, activity, water, alco
 
   // Factor bars for the breakdown section
   const factors = [
-    { label: "Stress / Cortisol", value: stressImpact, max: 30, color: "var(--color-danger)", icon: <Wind size={16} /> },
-    { label: "Sleep Deprivation", value: sleepImpact, max: 25, color: "var(--color-purple)", icon: <Moon size={16} /> },
-    { label: "Sedentary Behavior", value: activityImpact, max: 15, color: "var(--color-warning)", icon: <Activity size={16} /> },
-    { label: "Dehydration", value: waterImpact, max: 10, color: "#0EA5E9", icon: <Droplets size={16} /> },
+    { label: "Stress / Cortisol", value: hideData ? 0 : stressImpact, max: 30, color: "var(--color-danger)", icon: <Wind size={16} /> },
+    { label: "Sleep Deprivation", value: hideData ? 0 : sleepImpact, max: 25, color: "var(--color-purple)", icon: <Moon size={16} /> },
+    { label: "Sedentary Behavior", value: hideData ? 0 : activityImpact, max: 15, color: "var(--color-warning)", icon: <Activity size={16} /> },
+    { label: "Dehydration", value: hideData ? 0 : waterImpact, max: 10, color: "#0EA5E9", icon: <Droplets size={16} /> },
   ].sort((a, b) => b.value - a.value);
 
   return (
@@ -198,15 +198,26 @@ export default function AIInsights({ score, sleep, stress, activity, water, alco
               Personalized analysis using your daily log data — vitals, lifestyle, and habits.
             </p>
           </div>
-          <button className="primary-btn" onClick={runAI} disabled={aiLoading} style={{ background: 'var(--color-purple)' }}>
-            {aiLoading ? "Analyzing..." : "Generate Analysis"}
-          </button>
+          <div className="guest-overlay-container">
+            {isGuest ? (
+              <>
+                <button className="primary-btn" onClick={() => navigate('/login')} style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+                  <Lock size={16} /> Login to Continue
+                </button>
+                <div className="guest-tooltip">Please login to run AI Analysis</div>
+              </>
+            ) : (
+              <button className="primary-btn" onClick={runAI} disabled={aiLoading} style={{ background: 'var(--color-purple)' }}>
+                {aiLoading ? "Analyzing..." : "Generate Analysis"}
+              </button>
+            )}
+          </div>
         </div>
 
-        <div style={{ minHeight: 120, padding: 24, background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', marginBottom: 28 }}>
+        <div className={isGuest ? 'guest-blurred' : ''} style={{ minHeight: 120, padding: 24, background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', marginBottom: 28 }}>
           {!aiText && !aiLoading && (
             <div style={{ textAlign: 'center', color: 'var(--text-muted)', paddingTop: 28, fontSize: 13, fontWeight: 500 }}>
-              Click "Generate Analysis" to receive a personalized AI breakdown based on your logged data.
+              {isGuest ? "Login to receive a personalized AI breakdown based on your logged data." : "Click \"Generate Analysis\" to receive a personalized AI breakdown based on your logged data."}
             </div>
           )}
           <p style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.7, fontWeight: 500 }}>

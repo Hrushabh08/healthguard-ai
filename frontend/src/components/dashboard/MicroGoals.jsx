@@ -1,12 +1,18 @@
 import React, { useState } from 'react';
 import { CheckCircle2, Circle } from 'lucide-react';
 
-export default function MicroGoals() {
-  const [goals, setGoals] = useState([
+export default function MicroGoals({ isGuest }) {
+  const [goals, setGoals] = React.useState([
     { id: 1, text: 'Drink 2 liters of water', completed: false, pts: '+5' },
     { id: 2, text: '15-minute walk after lunch', completed: false, pts: '+8' },
     { id: 3, text: 'Sleep by 10:30 PM', completed: false, pts: '+12' },
   ]);
+
+  React.useEffect(() => {
+    if (isGuest) {
+      setGoals(prev => prev.map(g => ({ ...g, completed: false })));
+    }
+  }, [isGuest]);
 
   const toggleGoal = (id) => {
     setGoals(goals.map(g => g.id === id ? { ...g, completed: !g.completed } : g));

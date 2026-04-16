@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Scale, Ruler, X, RefreshCw } from "lucide-react";
 import { logsAPI, authAPI } from "../../services/api";
 
@@ -34,9 +34,32 @@ function daysSince(dateStr) {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   // App State
-  const [nav, setNav] = useState("dashboard");
+  const navMap = {
+    "/dashboard": "dashboard",
+    "/daily-log": "log",
+    "/risk-score": "risk",
+    "/ai-insights": "ai",
+    "/members": "members",
+    "/reports": "report",
+    "/settings": "settings"
+  };
+  const nav = navMap[location.pathname] || "dashboard";
+
+  const setNav = (newNav) => {
+    const reverseMap = {
+      "dashboard": "/dashboard",
+      "log": "/daily-log",
+      "risk": "/risk-score",
+      "ai": "/ai-insights",
+      "members": "/members",
+      "report": "/reports",
+      "settings": "/settings"
+    };
+    navigate(reverseMap[newNav] || "/dashboard");
+  };
   const [sidebar, setSidebar] = useState(true);
   const [showNotif, setShowNotif] = useState(false);
   const [showProf, setShowProf] = useState(false);
@@ -55,25 +78,33 @@ export default function Dashboard() {
     // Load Auth User
     try {
       const u = localStorage.getItem("hg_user");
-      if (u) setAuthUser(JSON.parse(u));
+      if (u) {
+        setAuthUser(JSON.parse(u));
+        // Fetch full profile from API synchronously with mount
+        loadFullProfile();
+      } else {
+        setAuthUser(null);
+        setProfile(null);
+      }
     } catch { /* ignore */ }
-
-    const raw = localStorage.getItem("hg_profile");
-    if (raw) {
-      const p = JSON.parse(raw);
-      // Auto-update age from DOB
-      if (p.dob) {
-        p.age = calculateAge(p.dob);
-      }
-      setProfile(p);
-
-      // Check if 30+ days since last update → show reminder
-      const days = daysSince(p.lastUpdated);
-      if (days >= 30) {
-        setShowReminder(true);
-      }
-    }
   }, []);
+
+  const loadFullProfile = async () => {
+    try {
+      const { data } = await authAPI.getMe();
+      if (data.success && data.user) {
+        const u = data.user;
+        const prof = {
+          fullName: u.name,
+          ...u.profile,
+          age: calculateAge(u.profile?.dob),
+        };
+        setProfile(prof);
+      }
+    } catch (err) {
+      console.error("Error loading profile:", err);
+    }
+  };
 
   // Build USER object from profile
   const USER = profile
@@ -100,7 +131,7 @@ export default function Dashboard() {
       age: calculateAge(formData.dob),
       lastUpdated: new Date().toISOString(),
     };
-    localStorage.setItem("hg_profile", JSON.stringify(updated));
+    // localStorage.setItem("hg_profile", JSON.stringify(updated));
     setProfile(updated);
     try {
       await authAPI.updateProfile({ weight: w, height: h, dob: formData.dob });
@@ -111,49 +142,40 @@ export default function Dashboard() {
   const [todayLog, setTodayLog] = useState(null);
 
   useEffect(() => {
+    if (!authUser) {
+      setTodayLog(null);
+      return;
+    }
     const loadTodayLog = async () => {
       try {
         const { data } = await logsAPI.getToday();
         if (data.log) setTodayLog(data.log);
       } catch {
-        // Fallback: try localStorage
-        try {
-          const raw = localStorage.getItem("hg_daily_logs");
-          if (raw) {
-            const logs = JSON.parse(raw);
-            const today = new Date().toISOString().slice(0, 10);
-            const found = logs.find(l => l.date === today);
-            if (found) setTodayLog(found);
-          }
-        } catch { /* ignore */ }
+         // Rely on API only
       }
     };
     loadTodayLog();
-  }, [nav]); // Refresh when navigating back to dashboard
+  }, [nav, authUser]); // Refresh when navigating back to dashboard
   const ls = todayLog?.lifestyle;
 
   // Notifications State
   const [notifs, setNotifsState] = useState([]);
 
   useEffect(() => {
+    // For guests, we don't show notifications or reminders
+    if (!authUser) {
+      setNotifsState([]);
+      return;
+    }
+
     let loadedNotifs = [];
-    try {
-      const stored = localStorage.getItem("hg_notifs");
-      if (stored && stored !== 'undefined') {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) loadedNotifs = parsed;
-      }
-    } catch { /* ignore */ }
+    // Only fetch from API or leave empty. Removed localStorage fallback.
     setNotifsState(loadedNotifs);
     
     // Dynamic Reminders check
     if (todayLog === null) {
       let wantsReminder = true;
-      try {
-        const settings = JSON.parse(localStorage.getItem("hg_settings"));
-        if (settings && settings.dailyReminder === false) wantsReminder = false;
-      } catch { /* ignore */ }
-
+      // Removed localStorage settings check to prevent any leak during testing.
       if (wantsReminder) {
         const todayStr = new Date().toISOString().slice(0, 10);
         const hasDailyReminder = loadedNotifs.some(n => n.type === "daily_reminder" && n.date === todayStr);
@@ -170,29 +192,30 @@ export default function Dashboard() {
           };
           const nextNotifs = [newNotif, ...loadedNotifs];
           setNotifsState(nextNotifs);
-          localStorage.setItem("hg_notifs", JSON.stringify(nextNotifs));
         }
       }
     }
-  }, [todayLog]);
+  }, [todayLog, authUser]);
 
   const setNotifs = (newNotifs) => {
     setNotifsState(prev => {
       const updated = typeof newNotifs === 'function' ? newNotifs(prev) : newNotifs;
-      localStorage.setItem("hg_notifs", JSON.stringify(updated));
+      // localStorage.setItem("hg_notifs", JSON.stringify(updated)); // Removed
       return updated;
     });
   };
 
+  const isGuest = !authUser;
+
   // Vitals State — seeded from today's daily log lifestyle section
-  const sleep = ls?.sleep ?? 5.1;
-  const stress = (ls?.stress ?? 7) * 10; // 1-10 → 0-100 for score formula
-  const activity = ls?.steps ? Number(ls.steps) : 2400;
+  const sleep = ls?.sleep ?? 0;
+  const stress = (ls?.stress ?? 0) * 10;
+  const activity = ls?.steps ? Number(ls.steps) : 0;
 
   // Lifestyle State — seeded from today's daily log
-  const water = ls?.waterIntake ?? 1.0;
-  const alcohol = ls?.alcohol ?? true;
-  const smoking = ls?.smoking ?? true;
+  const water = ls?.waterIntake ?? 0;
+  const alcohol = ls?.alcohol ?? false;
+  const smoking = ls?.smoking ?? false;
   const mealsOnTime = ls ? (ls.breakfast && ls.lunch && ls.dinner) : false;
 
   // Derived Score
@@ -205,7 +228,11 @@ export default function Dashboard() {
     (alcohol ? 8 : 0) +
     (smoking ? 10 : 0) +
     (!mealsOnTime ? 5 : 0);
-  const score = Math.min(100, Math.round(baseScore + habitPenalty));
+  
+  // Unified: Score is 0 for guests OR if no data has been logged today
+  const hasTodayData = !!todayLog;
+  const score = (!hasTodayData || isGuest) ? 0 : Math.min(100, Math.round(baseScore + habitPenalty));
+  const hideData = isGuest || !hasTodayData;
 
   const unreadCount = (notifs || []).filter(n => n?.unread).length;
 
@@ -224,7 +251,7 @@ export default function Dashboard() {
       age: calculateAge(profile.dob),
       lastUpdated: new Date().toISOString(),
     };
-    localStorage.setItem("hg_profile", JSON.stringify(updated));
+    // localStorage.setItem("hg_profile", JSON.stringify(updated));
     setProfile(updated);
     // Sync to DB
     try {
@@ -239,7 +266,7 @@ export default function Dashboard() {
   return (
     <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "var(--bg-primary)" }}>
       {/* Sidebar */}
-      <Sidebar nav={nav} setNav={setNav} sidebar={sidebar} setSidebar={setSidebar} navigate={navigate} />
+      <Sidebar nav={nav} setNav={setNav} sidebar={sidebar} setSidebar={setSidebar} navigate={navigate} isGuest={isGuest} />
 
       {/* Main Content Area */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
@@ -248,6 +275,7 @@ export default function Dashboard() {
           showNotif={showNotif} setShowNotif={setShowNotif} 
           showProf={showProf} setShowProf={setShowProf}
           notifs={notifs || []} setNotifs={setNotifs}
+          isGuest={isGuest}
         />
 
         <main style={{ flex: 1, padding: "32px", overflowY: "auto" }}>
@@ -359,12 +387,12 @@ export default function Dashboard() {
                 <HealthSummary score={score} />
                 <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
                   <EnvironmentalInsights />
-                  <BenchmarkingSection userScore={score} />
+                  <BenchmarkingSection userScore={score} isGuest={isGuest} hideData={hideData} />
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-                <MicroGoals />
-                <VoiceInput />
+                <MicroGoals isGuest={isGuest} />
+                <VoiceInput isGuest={isGuest} />
               </div>
             </div>
           )}
@@ -372,13 +400,13 @@ export default function Dashboard() {
           {/* Health Log View */}
           {nav === "log" && (
             <div className="fade-in">
-              <HealthLog />
+              <HealthLog isGuest={isGuest} navigate={navigate} />
             </div>
           )}
 
           {/* Risk Score View */}
           {nav === "risk" && (
-            <RiskScore score={score} sleep={sleep} stress={stress} activity={activity} />
+            <RiskScore score={score} sleep={sleep} stress={stress} activity={activity} isGuest={hideData} />
           )}
 
 
@@ -387,15 +415,14 @@ export default function Dashboard() {
             <div className="fade-in">
               <AIInsights score={score} sleep={sleep} stress={stress} activity={activity}
                 water={water} alcohol={alcohol} smoking={smoking} mealsOnTime={mealsOnTime}
-                todayLog={todayLog}
-              />
+                todayLog={todayLog} isGuest={isGuest} hideData={hideData} navigate={navigate} />
             </div>
           )}
 
           {/* Members View */}
           {nav === "members" && (
             <div className="fade-in">
-              <FamilyMembers />
+              <FamilyMembers userEmail={authUser?.email || null} isGuest={isGuest} navigate={navigate} />
             </div>
           )}
 
@@ -403,7 +430,7 @@ export default function Dashboard() {
           {nav === "report" && (
             <div className="fade-in" style={{ maxWidth: 640, margin: "0 auto" }}>
               <DoctorReadySummary score={score} sleep={sleep} stress={stress}
-                activity={activity} water={water} todayLog={todayLog}
+                activity={activity} water={water} todayLog={todayLog} isGuest={isGuest} hideData={hideData} navigate={navigate}
               />
             </div>
           )}
@@ -411,7 +438,7 @@ export default function Dashboard() {
           {/* Settings View */}
           {nav === "settings" && (
             <div className="fade-in" style={{ maxWidth: 800, margin: "0 auto" }}>
-              <AccountSettings profile={profile} updateProfileSettings={handleProfileUpdateFromSettings} />
+              <AccountSettings profile={profile} updateProfileSettings={handleProfileUpdateFromSettings} isGuest={isGuest} navigate={navigate} />
             </div>
           )}
 

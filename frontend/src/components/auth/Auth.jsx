@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { authAPI } from "../../services/api";
+import { Shield, User, Mail, Lock, Eye, EyeOff, CheckCircle } from "lucide-react";
 
 const COLORS = {
   gradientStart: "#4f46e5",
@@ -206,7 +207,7 @@ function InputField({ label, type, value, onChange, placeholder, icon, error }) 
               outline: "none",
             }}
           >
-            {show ? "🙈" : "👁️"}
+            {show ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
         )}
       </div>
@@ -407,7 +408,7 @@ export default function Auth() {
                 boxShadow: "0 0 0 2px rgba(255,255,255,0.25)",
               }}
             >
-              🛡️
+              <Shield size={28} strokeWidth={2.5} color="rgba(255,255,255,0.9)" />
             </div>
             <OrbitRing size={90} duration={7} delay={0} color="rgba(255,255,255,0.35)" dotSize={7} />
             <OrbitRing size={115} duration={11} delay={-3} color="rgba(255,255,255,0.18)" dotSize={5} />
@@ -597,8 +598,6 @@ export default function Auth() {
               <div style={{ display: "flex", justifyContent: "center", gap: 12 }}>
                 {[
                   { id: "google", icon: "G", label: "Google" },
-                  { id: "facebook", icon: "f", label: "Facebook" },
-                  { id: "linkedin", icon: "in", label: "LinkedIn" },
                 ].map(({ id, icon, label }) => (
                   <SocialButton
                     key={id}
@@ -635,7 +634,7 @@ export default function Auth() {
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="Alex Johnson"
-                icon="👤"
+                icon={<User size={18} />}
                 error={errors.name}
               />
             )}
@@ -645,7 +644,7 @@ export default function Auth() {
               value={form.email}
               onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
               placeholder="you@example.com"
-              icon="✉️"
+              icon={<Mail size={18} />}
               error={errors.email}
             />
             <InputField
@@ -654,7 +653,7 @@ export default function Auth() {
               value={form.password}
               onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
               placeholder="••••••••"
-              icon="🔒"
+              icon={<Lock size={18} />}
               error={errors.password}
             />
 
@@ -689,9 +688,13 @@ export default function Auth() {
                   fontWeight: 600,
                   textAlign: "center",
                   animation: "fadeSlideIn 0.4s ease both",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6
                 }}
               >
-                ✅ {isLogin ? "Signed in successfully!" : "Account created! Welcome aboard."}
+                <CheckCircle size={16} /> {isLogin ? "Signed in successfully!" : "Account created! Welcome aboard."}
               </div>
             )}
 

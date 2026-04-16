@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
-import { Bell, ChevronDown, X } from 'lucide-react';
+import { Bell, ChevronDown, X, User } from 'lucide-react';
 
-export default function Topbar({ nav, setNav, score, unreadCount, USER, showNotif, setShowNotif, showProf, setShowProf, notifs, setNotifs }) {
+export default function Topbar({ nav, setNav, score, unreadCount, USER, showNotif, setShowNotif, showProf, setShowProf, notifs, setNotifs, isGuest }) {
   const notifRef = useRef(null);
   const profRef = useRef(null);
 
@@ -55,86 +55,110 @@ export default function Topbar({ nav, setNav, score, unreadCount, USER, showNoti
 
         <div style={{ width: 1, height: 24, background: "var(--border-color)" }} />
 
-        {/* Notifications */}
-        <div style={{ position: "relative" }} ref={notifRef}>
-          <button onClick={() => { setShowNotif(!showNotif); setShowProf(false); }}
-            style={{ position: "relative", background: "none", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--text-secondary)", width: 40, height: 40, borderRadius: "50%", transition: "background 0.2s" }}
-            onMouseEnter={e => e.currentTarget.style.background = "var(--bg-tertiary)"}
-            onMouseLeave={e => e.currentTarget.style.background = "none"}
-          >
-            <Bell size={20} />
-            {unreadCount > 0 && <span style={{ position: "absolute", top: 8, right: 10, width: 8, height: 8, borderRadius: "50%", background: "var(--color-danger)", border: "2px solid #fff" }} />}
-          </button>
+        {/* Notifications - Hidden for Guests */}
+        {!isGuest && (
+          <div style={{ position: "relative" }} ref={notifRef}>
+            <button onClick={() => { setShowNotif(!showNotif); setShowProf(false); }}
+              style={{ position: "relative", background: "none", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--text-secondary)", width: 40, height: 40, borderRadius: "50%", transition: "background 0.2s" }}
+              onMouseEnter={e => e.currentTarget.style.background = "var(--bg-tertiary)"}
+              onMouseLeave={e => e.currentTarget.style.background = "none"}
+            >
+              <Bell size={20} />
+              {unreadCount > 0 && <span style={{ position: "absolute", top: 8, right: 10, width: 8, height: 8, borderRadius: "50%", background: "var(--color-danger)", border: "2px solid #fff" }} />}
+            </button>
 
-          {showNotif && (
-            <div style={{
-              position: "absolute", right: 0, top: 50, width: 340, background: "#fff",
-              border: "1px solid var(--border-color)", borderRadius: "var(--radius-lg)",
-              boxShadow: "var(--shadow-lg)", zIndex: 100, overflow: "hidden"
-            }}>
-              <div style={{ padding: "16px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ fontSize: 14, fontWeight: 700 }}>Notifications</div>
-                <button onClick={() => setNotifs(p => p.map(n => ({...n, unread: false})))} style={{ fontSize: 11, color: "var(--color-accent)", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Mark all read</button>
-              </div>
-              <div style={{ maxHeight: 320, overflowY: "auto" }}>
-                {notifs.map(n => (
-                  <div key={n.id} onClick={() => setNotifs(p => p.map(x => x.id === n.id ? {...x, unread: false} : x))}
-                    style={{ padding: "16px", borderBottom: "1px solid var(--bg-tertiary)", cursor: "pointer", background: n.unread ? "var(--bg-primary)" : "#fff", display: "flex", gap: 12, position: "relative" }}>
-                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: n.color, flexShrink: 0, marginTop: 6 }} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, color: "var(--text-primary)", fontWeight: n.unread ? 600 : 400, lineHeight: 1.4, paddingRight: 24 }}>{n.text}</div>
-                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>{n.time}</div>
+            {showNotif && (
+              <div style={{
+                position: "absolute", right: 0, top: 50, width: 340, background: "#fff",
+                border: "1px solid var(--border-color)", borderRadius: "var(--radius-lg)",
+                boxShadow: "var(--shadow-lg)", zIndex: 100, overflow: "hidden"
+              }}>
+                <div style={{ padding: "16px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>Notifications</div>
+                  <button onClick={() => setNotifs(p => p.map(n => ({...n, unread: false})))} style={{ fontSize: 11, color: "var(--color-accent)", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Mark all read</button>
+                </div>
+                <div style={{ maxHeight: 320, overflowY: "auto" }}>
+                  {notifs.map(n => (
+                    <div key={n.id} onClick={() => setNotifs(p => p.map(x => x.id === n.id ? {...x, unread: false} : x))}
+                      style={{ padding: "16px", borderBottom: "1px solid var(--bg-tertiary)", cursor: "pointer", background: n.unread ? "var(--bg-primary)" : "#fff", display: "flex", gap: 12, position: "relative" }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: n.color, flexShrink: 0, marginTop: 6 }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, color: "var(--text-primary)", fontWeight: n.unread ? 600 : 400, lineHeight: 1.4, paddingRight: 24 }}>{n.text}</div>
+                        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>{n.time}</div>
+                      </div>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setNotifs(p => p.filter(x => x.id !== n.id)); }}
+                        style={{ position: "absolute", right: 12, top: 16, background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 4 }}
+                      >
+                        <X size={14} />
+                      </button>
                     </div>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); setNotifs(p => p.filter(x => x.id !== n.id)); }}
-                      style={{ position: "absolute", right: 12, top: 16, background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 4 }}
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* Profile */}
-        <div style={{ position: "relative" }} ref={profRef}>
-          <div onClick={() => { setShowProf(!showProf); setShowNotif(false); }}
-            style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px 6px 6px", borderRadius: "999px", background: "transparent", cursor: "pointer", border: "1px solid transparent", transition: "all 0.2s" }}
-            onMouseEnter={e => e.currentTarget.style.background = "var(--bg-tertiary)"}
-            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-          >
-            <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--text-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff" }}>{USER.avatar}</div>
-            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{USER.name.split(" ")[0]}</span>
-            <ChevronDown size={14} color="var(--text-secondary)" />
+            )}
           </div>
-          
-          {showProf && (
-            <div style={{
-              position: "absolute", right: 0, top: 48, width: 220, background: "#fff",
-              border: "1px solid var(--border-color)", borderRadius: "var(--radius-lg)",
-              boxShadow: "var(--shadow-lg)", zIndex: 100, padding: 8
-            }}>
-              <div style={{ padding: "12px", borderBottom: "1px solid var(--border-color)", marginBottom: 8 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{USER.name}</div>
-                <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>{USER.email}</div>
+        )}
+
+        {/* Profile / Auth */}
+        <div style={{ position: "relative" }} ref={profRef}>
+          {isGuest ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--bg-tertiary)", border: "1px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)" }}>
+                 <User size={20} />
               </div>
-              <button 
-                onClick={() => { setNav("settings"); setShowProf(false); }}
-                style={{ width: "100%", padding: "10px 12px", textAlign: "left", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, color: "var(--text-primary)", borderRadius: "var(--radius-sm)" }}
-                onMouseEnter={e => e.currentTarget.style.background = "var(--bg-tertiary)"}
-                onMouseLeave={e => e.currentTarget.style.background = "none"}>Account Settings</button>
-              <button style={{ width: "100%", padding: "10px 12px", textAlign: "left", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, color: "var(--color-danger)", borderRadius: "var(--radius-sm)" }}
-                onClick={() => {
-                  localStorage.removeItem("hg_token");
-                  localStorage.removeItem("hg_user");
-                  localStorage.removeItem("hg_profile");
-                  window.location.href = "/";
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = "#FEE2E2"}
-                onMouseLeave={e => e.currentTarget.style.background = "none"}>Sign Out</button>
+              <button
+                 onClick={() => window.location.href = "/login"}
+                 style={{
+                   padding: "10px 22px", borderRadius: "100px", background: "var(--color-accent)",
+                   color: "#fff", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer",
+                   boxShadow: "0 4px 12px rgba(2,132,199,0.3)", transition: "all 0.2s"
+                 }}
+                 onMouseEnter={e => e.currentTarget.style.transform = "translateY(-1px)"}
+                 onMouseLeave={e => e.currentTarget.style.transform = "none"}
+              >
+                Sign In
+              </button>
             </div>
+          ) : (
+            <>
+              <div onClick={() => { setShowProf(!showProf); setShowNotif(false); }}
+                style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px 6px 6px", borderRadius: "999px", background: "transparent", cursor: "pointer", border: "1px solid transparent", transition: "all 0.2s" }}
+                onMouseEnter={e => e.currentTarget.style.background = "var(--bg-tertiary)"}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+              >
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--text-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff" }}>{USER.avatar}</div>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{USER.name.split(" ")[0]}</span>
+                <ChevronDown size={14} color="var(--text-secondary)" />
+              </div>
+              
+              {showProf && (
+                <div style={{
+                  position: "absolute", right: 0, top: 48, width: 220, background: "#fff",
+                  border: "1px solid var(--border-color)", borderRadius: "var(--radius-lg)",
+                  boxShadow: "var(--shadow-lg)", zIndex: 100, padding: 8
+                }}>
+                  <div style={{ padding: "12px", borderBottom: "1px solid var(--border-color)", marginBottom: 8 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{USER.name}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>{USER.email}</div>
+                  </div>
+                  <button 
+                    onClick={() => { setNav("settings"); setShowProf(false); }}
+                    style={{ width: "100%", padding: "10px 12px", textAlign: "left", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, color: "var(--text-primary)", borderRadius: "var(--radius-sm)" }}
+                    onMouseEnter={e => e.currentTarget.style.background = "var(--bg-tertiary)"}
+                    onMouseLeave={e => e.currentTarget.style.background = "none"}>Account Settings</button>
+                  <button style={{ width: "100%", padding: "10px 12px", textAlign: "left", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, color: "var(--color-danger)", borderRadius: "var(--radius-sm)" }}
+                    onClick={() => {
+                      Object.keys(localStorage).forEach(key => {
+                        if (key.startsWith('hg_')) localStorage.removeItem(key);
+                      });
+                      window.location.href = "/login";
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#FEE2E2"}
+                    onMouseLeave={e => e.currentTarget.style.background = "none"}>Sign Out</button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
